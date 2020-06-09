@@ -98,14 +98,18 @@ def savetiffs(file_name, data):
         images[0].save(file_name, save_all=True, append_images=images[1:])
 
 
-def radial_PSF(xy_size, pixel_size=5):
+def radial_PSF(xy_size, pixel_size=5, stack_size=40):
     # Radial PSF
     mp = msPSF.m_params  # Microscope Parameters as defined in microscPSF. Dictionary format.
+
+    # Takes a stack size, multiplies it by the pixel size to get the effective range and then divides it by 2 to be
+    # equal around 0.
+    z_depth_values = (stack_size * pixel_size)/2
 
     pixel_size = pixel_size  # In microns... (step size in the x-y plane)
     xy_size = xy_size  # In pixels.
 
-    pv = np.arange(-0.1, 0.1, pixel_size)  # Creates a 1D array stepping up by denoted pixel size,
+    pv = np.arange(-z_depth_values, z_depth_values, pixel_size)  # Creates a 1D array stepping up by denoted pixel size,
     # Essentially stepping in Z.
 
     psf_xy1 = msPSF.gLXYZParticleScan(mp, pixel_size, xy_size, pv)  # Matrix ordered (Z,Y,X)

@@ -10,22 +10,29 @@ from scipy import signal
 # radial PSF, and a pinhole simulated by a layer wise convolution with a gaussian spacial filter.
 # Array sizes need to be odd to work with the convolution as a centre point needs to be determinable.
 
+### INPUTS ###
+# PSF #
+xy_size = 401
+pixel_size = 0.005
+stack_size = 40
+
 
 ### PSF Generation ###
 # Made a 3D PSF
 # Each pixel = 5 nanometres.
 # Greater xy size the more PSF is contained in the array. 255 seems optimal, but 101 works and is much faster.
-radPSF = sam.radial_PSF(201, 0.005)
+radPSF = sam.radial_PSF(xy_size, pixel_size, stack_size)
 radPSF = np.moveaxis(radPSF, 0, -1)     # The 1st axis was the z-values. Now in order y,x,z.
-for i in range(0, radPSF.shape[2]):
-    radPSF[:,:,i] = radPSF[:,:,i] / radPSF[:,:,i].sum()          # Equating to 1. (to do: 1 count =  1 microwatt, hence conversion to photons.)
+
+radPSF = radPSF / radPSF.sum()          # Equating to 1. (to do: 1 count =  1 microwatt, hence conversion to photons.)
+
 
 ### SAMPLE PARAMETERS ###
 # Made a point in centre of 2D array
-point = np.zeros((51, 51, radPSF.shape[2]))
-point[35, 35, radPSF.shape[2]//2+8] = 100
-point[15, 15, radPSF.shape[2]//2+4] = 100
-point[00:50, 25, radPSF.shape[2]//2] = 1
+point = np.zeros((201, 201, radPSF.shape[2]))
+point[150, 150, radPSF.shape[2]//2+8] = 100
+point[50, 50, radPSF.shape[2]//2+4] = 100
+point[00:100, 100, radPSF.shape[2]//2] = 1
 
 
 ### STAGE SCANNING SO SAMPLE IS RUN ACROSS THE PSF (OR 'LENS') ###
@@ -44,7 +51,7 @@ scan_sum = np.sum(scan, 2)
 
 ### SPACIAL FILTER PARAMETERS ###
 # 1/0 pinhole to make.!!!---> with moveability relative to the centre. circle.
-circle_pinhole = sam.circle_mask(scan, 0.1, (100, 100))  # Shifting the centre, offsets the image by the same value.
+circle_pinhole = sam.circle_mask(scan, 20, (200, 200))  # Shifting the centre, offsets the image by the same value.
 
 # # Made a gaussian. (Our spacial filter)  NEED SCALE FOR THIS PINHOLE AS IT WILL VASTLY IMPACT QUALITY.
 spacial_filter = sam.Gaussian_Map((scan.shape[1], scan.shape[0]), 0, 0, 0, 1, 1)
