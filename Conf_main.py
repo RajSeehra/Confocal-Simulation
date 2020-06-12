@@ -57,7 +57,7 @@ for x in range(0, point.shape[1]+1):
         z_sum = np.sum(scan, 2)
 
         # Multiply by pinhole
-        circle_pinhole = sam.circle_mask(scan, 20, (x, y))  # Produces a simple circle mask centred at x,y.
+        circle_pinhole = sam.circle_mask(scan, 10, (x, y))  # Produces a simple circle mask centred at x,y.
         pinhole_sum = z_sum * circle_pinhole
 
         # Add to the collection array

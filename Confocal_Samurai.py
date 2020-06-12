@@ -247,6 +247,7 @@ def circle_mask(array, radius, centre_xy):
     ones = ones / np.sum(ones)              # Normalised
     return ones
 
+
 def array_multiply(base_array, offset_array, x_pos, y_pos):
     # Using a cropping system this function multiplies two arrays at a certain position in space.
     offset_array_centre_dist_x = (offset_array.shape[1]) // 2
@@ -293,8 +294,7 @@ def array_multiply(base_array, offset_array, x_pos, y_pos):
     # Now to finally multiply the two same sized arrays...
     multiplied_array = oi_brd_image * ba_brd_image
 
-
-
+    # Extract the original section.
     multiplied_array = multiplied_array[ba_top_pad:ba_top_pad+base_array.shape[0],
                                         ba_left_pad:ba_left_pad+base_array.shape[1],
                                         :]
