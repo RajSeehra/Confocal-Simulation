@@ -251,3 +251,56 @@ def circle_mask(array, radius, centre_xy):
     ones = ones / np.sum(ones)              # Normalised
     return ones
 
+def array_multiply(base_array, offset_array, x_pos, y_pos):
+    # Using a cropping system this function multiplies two arrays at a certain position in space.
+    offset_array_centre_dist_x = (offset_array.shape[1]) // 2
+    offset_array_centre_dist_y = (offset_array.shape[0]) // 2
+
+
+    # Base array pad values
+    ba_left_pad = -(x_pos - offset_array_centre_dist_x) + 1
+    if ba_left_pad < 0:
+        ba_left_pad = 0
+    ba_right_pad = x_pos + offset_array_centre_dist_x - base_array.shape[1]
+    if x_pos + offset_array_centre_dist_x < base_array.shape[1]:
+        ba_right_pad = 0
+    ba_top_pad = -(y_pos - offset_array_centre_dist_y) + 1
+    if ba_top_pad < 0:
+        ba_top_pad = 0
+    ba_bottom_pad = y_pos + offset_array_centre_dist_y - base_array.shape[0]
+    if y_pos + offset_array_centre_dist_y < base_array.shape[0]:
+        ba_bottom_pad = 0
+
+    # Produce the bordered base image.
+    ba_brd_image = np.pad(base_array, ((ba_top_pad, ba_bottom_pad), (ba_left_pad, ba_right_pad), (0,0)))
+
+    # Offset image pad values
+    oi_left_pad = x_pos - offset_array_centre_dist_x - 1
+    if oi_left_pad < 0:
+        oi_left_pad = 0
+    oi_right_pad = ba_brd_image.shape[1] - oi_left_pad - offset_array.shape[1]
+    if oi_right_pad < 0:
+        oi_right_pad = 0
+    oi_top_pad = y_pos - offset_array_centre_dist_y - 1
+    if  oi_top_pad < 0:
+        oi_top_pad = 0
+    oi_bottom_pad = ba_brd_image.shape[0] - oi_top_pad - offset_array.shape[1]
+    if oi_bottom_pad < 0:
+        oi_bottom_pad = 0
+
+    # Produce the bordered offset image
+    oi_brd_image = np.pad(offset_array, ((oi_top_pad, oi_bottom_pad), (oi_left_pad, oi_right_pad), (0, 0)))
+
+    print(ba_left_pad,ba_right_pad,ba_top_pad,ba_bottom_pad)
+    print(oi_left_pad,oi_right_pad,oi_top_pad,oi_bottom_pad)
+
+    # Now to finally multiply the two same sized arrays...
+    multiplied_array = oi_brd_image * ba_brd_image
+
+
+
+    multiplied_array = multiplied_array[ba_top_pad:ba_top_pad+base_array.shape[0],
+                                        ba_left_pad:ba_left_pad+base_array.shape[1],
+                                        :]
+
+    return multiplied_array
