@@ -110,7 +110,7 @@ def radial_PSF(xy_size, pixel_size=5, stack_size=40):
     pv = np.arange(-z_depth, z_depth, pixel_size)  # Creates a 1D array stepping up by denoted pixel size,
     # Essentially stepping in Z.
 
-    psf_xy1 = msPSF.gLXYZParticleScan(mp, pixel_size, xy_size, pv)  # Matrix ordered (Z,Y,X)
+    psf_xy1 = msPSF.gLXYZFocalScan(mp, pixel_size, xy_size, pv)  # Matrix ordered (Z,Y,X)
 
     psf_total = psf_xy1
 
@@ -242,7 +242,7 @@ def circle_mask(array, radius, centre_xy):
 
     r = radius
     # Produce circle mask, ones grid = to original file and cut out.
-    y, x = np.ogrid[a_x:b_x, a_y:b_y]                 # produces a list which collapses to 0 at the centre in x and y
+    y, x = np.ogrid[a_y:b_y, a_x:b_x]                 # produces a list which collapses to 0 at the centre in x and y
     mask = x*x + y*y <= r*r                           # produces a true/false array where the centre is true.
     ones= np.zeros((array.shape[1], array.shape[0]))
     ones[mask] = 1                                    # uses the mask to turn the zeroes to 1 in the TRUE zone of mask.
@@ -271,7 +271,7 @@ def array_multiply(base_array, offset_array, x_pos, y_pos):
         ba_bottom_pad = 0
 
     # Produce the bordered base image.
-    ba_brd_image = np.pad(base_array, ((ba_top_pad, ba_bottom_pad), (ba_left_pad, ba_right_pad), (0,0)))
+    ba_brd_image = np.pad(base_array, ((ba_top_pad, ba_bottom_pad), (ba_left_pad, ba_right_pad), (0,0)),"minimum")
 
     # Offset image pad values
     oi_left_pad = x_pos - offset_array_centre_dist_x - 1
