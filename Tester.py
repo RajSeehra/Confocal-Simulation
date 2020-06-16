@@ -18,11 +18,13 @@ from PIL import Image
 # ones = np.ones((1000, 1000))
 # ones[mask] = 0
 
-x = np.load("conf2.npy")
+
+
+# x = np.load("conf2.npy")
 # print(np.max(x))
 # sam.savetiffs("output.tif", x)
 # array= np.zeros((201,201))
-
+#
 # for i in range(0, x.shape[2]):
 #     array[i%201, i//201] = np.sum(x[:,:,i])
 #     print(i//201, i%201)
@@ -32,32 +34,34 @@ x = np.load("conf2.npy")
 # plt.show()
 
 
-#
-# ### INPUTS ###
-# #  Laser PSF #
-# xy_size = 201
-# pixel_size = 0.005
-# stack_size = 40
-#
-#
-# ### PSF Generation ###
-# # Made a 3D PSF
-# # Each pixel = 5 nanometres.
-# # Greater xy size the more PSF is contained in the array. 255 seems optimal, but 101 works and is much faster.
-# laserPSF = sam.radial_PSF(xy_size, pixel_size, stack_size)
-# laserPSF = np.moveaxis(laserPSF, 0, -1)     # The 1st axis was the z-values. Now in order y,x,z.
-#
-# laserPSF = laserPSF / laserPSF.sum()          # Equating to 1. (to do: 1 count =  1 microwatt, hence conversion to photons.)
-#
-#
-# ### SAMPLE PARAMETERS ###
-# # Made a point in centre of 2D array
-# point = np.zeros((201, 201, laserPSF.shape[2]))
-# point[50, 50, laserPSF.shape[2] // 2 + 8] = 1
-# point[100, 100, laserPSF.shape[2] // 2 + 4] = 1
-# point[00:100, 100, laserPSF.shape[2] // 2] = 1
-#
-# a = sam.array_multiply(point, laserPSF, 125, 125)
+
+
+
+### INPUTS ###
+#  Laser PSF #
+xy_size = 201
+pixel_size = 0.005
+stack_size = 100
+
+
+### PSF Generation ###
+# Made a 3D PSF
+# Each pixel = 5 nanometres.
+# Greater xy size the more PSF is contained in the array. 255 seems optimal, but 101 works and is much faster.
+laserPSF = sam.radial_PSF(xy_size, pixel_size, stack_size)
+laserPSF = np.moveaxis(laserPSF, 0, -1)     # The 1st axis was the z-values. Now in order y,x,z.
+
+laserPSF = laserPSF / laserPSF.sum()          # Equating to 1. (to do: 1 count =  1 microwatt, hence conversion to photons.)
+
+
+### SAMPLE PARAMETERS ###
+# Made a point in centre of 2D array
+point = np.zeros((201, 201, laserPSF.shape[2]))
+point[50, 50, laserPSF.shape[2] // 2 + 8] = 1
+point[100, 100, laserPSF.shape[2] // 2 + 4] = 1
+point[00:100, 100, laserPSF.shape[2] // 2] = 1
+
+a = sam.array_multiply(point, laserPSF, 125, 125)
 #
 # scan = scan = np.zeros((laserPSF.shape[1], laserPSF.shape[0], laserPSF.shape[2]))
 #
@@ -75,3 +79,8 @@ x = np.load("conf2.npy")
 # plt.subplot(122)
 # plt.imshow(pinhole_sum)
 # plt.show()
+
+
+plt.imshow(a[:,:,50])
+plt.show()
+
