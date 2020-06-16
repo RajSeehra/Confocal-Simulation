@@ -12,7 +12,7 @@ from scipy import signal
 
 ### INPUTS ###
 #  Laser PSF #
-xy_size = 201
+xy_size = 100
 pixel_size = 0.005
 stack_size = 40
 
@@ -29,10 +29,10 @@ laserPSF = laserPSF / laserPSF.sum()          # Equating to 1. (to do: 1 count =
 
 ### SAMPLE PARAMETERS ###
 # Made a point in centre of 2D array
-point = np.zeros((201, 201, laserPSF.shape[2]))
-point[50, 50, laserPSF.shape[2] // 2 + 8] = 1
-point[100, 100, laserPSF.shape[2] // 2 + 4] = 1
-point[00:100, 100, laserPSF.shape[2] // 2] = 1
+point = np.zeros((xy_size, xy_size, laserPSF.shape[2]))
+# point[50, 50, laserPSF.shape[2] // 2 + 8] = 1
+# point[100, 100, laserPSF.shape[2] // 2 + 4] = 1
+point[00:laserPSF.shape[0]//2, laserPSF.shape[1]//2, laserPSF.shape[2] // 2] = 1
 
 
 ### STAGE SCANNING SO SAMPLE IS RUN ACROSS THE PSF (OR 'LENS') ###
@@ -45,8 +45,8 @@ counter = 0
 
 
 # Iterates across the array to produce arrays illuminated by the sample, with a laser blurred by the first lens.
-for x in range(0, point.shape[1]+1):
-    for y in range(0, point.shape[0]+1):
+for x in range(0, point.shape[1]):
+    for y in range(0, point.shape[0]):
         laser_illum = sam.array_multiply(point, laserPSF, x, y)
         # Convolute the produced array with the PSF to simulate the second lens.
         for i in range(0, point.shape[2]):
@@ -57,11 +57,12 @@ for x in range(0, point.shape[1]+1):
         z_sum = np.sum(scan, 2)
 
         # Multiply by pinhole
-        circle_pinhole = sam.circle_mask(scan, 10, (x, y))  # Produces a simple circle mask centred at x,y.
+        circle_pinhole = 1 #sam.circle_mask(scan, 10, (x, y))  # Produces a simple circle mask centred at x,y.
         pinhole_sum = z_sum * circle_pinhole
 
         # Add to the collection array
         sums[:,:,counter] = pinhole_sum
+        print("Counter: ", counter)
         counter = counter + 1
 
 

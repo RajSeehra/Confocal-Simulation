@@ -288,7 +288,7 @@ def array_multiply(base_array, offset_array, x_pos, y_pos):
         oi_bottom_pad = 0
 
     # Produce the bordered offset image
-    oi_brd_image = np.pad(offset_array, ((oi_top_pad, oi_bottom_pad), (oi_left_pad, oi_right_pad), (0, 0)))
+    oi_brd_image = np.pad(offset_array, ((oi_top_pad, oi_bottom_pad), (oi_left_pad, oi_right_pad), (0, 0)), 'minimum')
 
     print(ba_left_pad,ba_right_pad,ba_top_pad,ba_bottom_pad)
     print(oi_left_pad,oi_right_pad,oi_top_pad,oi_bottom_pad)
