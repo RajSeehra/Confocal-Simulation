@@ -2,6 +2,7 @@ from PIL import Image
 import numpy as np
 import os
 import microscPSF as msPSF
+from scipy import signal
 
 
 def pixel_cutter(file_name, x_position, y_position, window_size_x=10, window_size_y=10, frame=0):
@@ -290,8 +291,9 @@ def array_multiply(base_array, offset_array, x_pos, y_pos):
     # Produce the bordered offset image
     oi_brd_image = np.pad(offset_array, ((oi_top_pad, oi_bottom_pad), (oi_left_pad, oi_right_pad), (0, 0)), 'minimum')
 
-    print(ba_left_pad,ba_right_pad,ba_top_pad,ba_bottom_pad)
-    print(oi_left_pad,oi_right_pad,oi_top_pad,oi_bottom_pad)
+    ### Checks for the values of the pads.
+    # print(ba_left_pad,ba_right_pad,ba_top_pad,ba_bottom_pad)
+    # print(oi_left_pad,oi_right_pad,oi_top_pad,oi_bottom_pad)
 
     # Now to finally multiply the two same sized arrays...
     multiplied_array = oi_brd_image * ba_brd_image
@@ -302,3 +304,85 @@ def array_multiply(base_array, offset_array, x_pos, y_pos):
                                         :]
 
     return multiplied_array
+
+def stage_scanning(laserPSF, point):
+    # Produce an array that will receive the data we collect.
+    laser_illum = np.zeros((laserPSF.shape[1], laserPSF.shape[0], laserPSF.shape[2]))  # Laser x sample
+    scan = np.zeros((laserPSF.shape[1], laserPSF.shape[0], laserPSF.shape[2]))         # Laser illum conv w/ psf
+    sums = np.zeros((point.shape[1], point.shape[0], int(point.shape[1] * point.shape[0])+1))  # z sum of scan.
+
+    # Counter to track our z position/frame.
+    counter = 0
+
+    # Iterates across the array to produce arrays illuminated by the sample, with a laser blurred by the first lens.
+    for x in range(0, point.shape[1]):
+        for y in range(0, point.shape[0]):
+            # Multiplies the PSF multiplied laser with the sample. The centre of the sample is moved to position x,y
+            # on the laser array, as this is a stage scanning microscope.
+            laser_illum = array_multiply(laserPSF, point, x, y)
+            # Convolute the produced array with the PSF to simulate the second lens.
+            for i in range(0, point.shape[2]):
+                scan[:,:,i] = np.rot90(signal.fftconvolve(laserPSF[:,:,i], laser_illum[:,:,i], mode="same"),2)
+                # scan[:,:,i] = np.rot90(sam.kernel_filter_2D(laserPSF[:, :, i], laser_illum[:, :, i]), 2)        # When running a larger image over a smaller one it rotates the resulting info.
+            print("x:", x, " and y:", y)
+            # Flatten and sum z stack.
+            z_sum = np.sum(scan, 2)
+
+            # Add to the collection array
+            sums[:,:,counter] = z_sum
+            print("Counter: ", counter)
+            counter = counter + 1
+
+    return sums
+
+#### Work in progress to get more accurate binning ###
+# def binning(sample, xy_size, summed_array, mag_ratio):
+#     # Set up the confocal array and the intermediate array.
+#     # The intermediate acts as a holding cell for the array values once summed up. They are returned to their original
+#     # position to make the next step easier.
+#     conf_array = np.zeros((sample.shape[0], sample.shape[1]))
+#     intermediate = np.zeroes((xy_size,xy_size))
+#
+#     # Initially we sum and organise the arrays as in the original image size. This allows us to make a pseudo-replica
+#     # of the original image which we then bin into the correct positions
+#     for i in range(0, summed_array.shape[2] - 1):
+#         intermediate[i % summed_array.shape[0], i // summed_array.shape[1]] = summed_array[:, :, i]
+#         print(i // summed_array.shape[1], i % summed_array.shape[0])
+#
+#     # If the mag_ratio is a float variable then the array will stumble and take steps of different size.
+#     # Hence in such cases we adjust and add on the excess to the right/bottom
+#     # and subtract it from the left/top as needed.
+#
+#     if mag_ratio - int(mag_ratio) > 0:
+#         remainder = mag_ratio - int(mag_ratio)
+#
+#         for y in range(0, conf_array.shape[0]):
+#             for x in range(0, conf_array.shape[1]):
+#                 conf_array[y, x] = np.sum(summed_array[int(y * mag_ratio):int(y * mag_ratio + mag_ratio),
+#                                                       int(x * mag_ratio):int(x * mag_ratio + mag_ratio)])
+#
+#                 # These next variables collect the next x and y row/column of the same length as the mag array
+#                 array_remainder_top = np.sum(summed_array[int(y * mag_ratio -1),
+#                                                 int(x * mag_ratio):int(x * mag_ratio + mag_ratio)])
+#                 if y * mag_ratio - 1 < 0:
+#                     array_remainder_top = 0
+#
+#                 array_remainder_bottom = np.sum(summed_array[int(y * mag_ratio + mag_ratio + 1),
+#                                                 int(x * mag_ratio):int(x * mag_ratio + mag_ratio)])
+#                 if y * mag_ratio + mag_ratio + 1 > 0:
+#                     array_remainder_bottom = 0
+#
+#                 array_remainder_left = np.sum(summed_array[int(y * mag_ratio):int(y * mag_ratio + mag_ratio),
+#                                                          int(x * mag_ratio - 1)])
+#                 array_remainder_right = np.sum(summed_array[int(y * mag_ratio):int(y * mag_ratio + mag_ratio),
+#                                                 int(x * mag_ratio + mag_ratio + 1)])
+#                 array_remainder_bottom_right = np.sum(summed_array[int(y * mag_ratio + mag_ratio + 1),
+#                                                      int(x * mag_ratio + mag_ratio + 1)])
+#
+#                 #
+#
+#                 # conf_array[y, x] = conf_array[y, x] +
+#     # elif mag_ratio - int(mag_ratio) == 0:
+
+
+
