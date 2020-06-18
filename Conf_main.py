@@ -132,7 +132,7 @@ if mode == "confocal":
     conf_array = np.zeros((point.shape[0], point.shape[1]))
 
     # Iterate through the z stack and sum the values and add them to the appropriate place on the image.
-    for i in range(0, pinhole_sum.shape[2]-1):
+    for i in range(0, pinhole_sum.shape[2]):
         conf_array[i%point.shape[0], i//point.shape[1]] = np.sum(pinhole_sum[:,:,i])
         print(i//point.shape[1], i%point.shape[0])
 

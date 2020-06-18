@@ -309,7 +309,7 @@ def stage_scanning(laserPSF, point):
     # Produce an array that will receive the data we collect.
     laser_illum = np.zeros((laserPSF.shape[1], laserPSF.shape[0], laserPSF.shape[2]))  # Laser x sample
     scan = np.zeros((laserPSF.shape[1], laserPSF.shape[0], laserPSF.shape[2]))         # Laser illum conv w/ psf
-    sums = np.zeros((point.shape[1], point.shape[0], int(point.shape[1] * point.shape[0])+1))  # z sum of scan.
+    sums = np.zeros((point.shape[1], point.shape[0], int(point.shape[1] * point.shape[0])))  # z sum of scan.
 
     # Counter to track our z position/frame.
     counter = 0
