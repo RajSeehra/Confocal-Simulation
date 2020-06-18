@@ -14,7 +14,7 @@ from scipy import signal
 #  Laser, PSF and Sample #
 xy_size = 100           # xy size for both laser and sample.
 pixel_size = 0.02      # Ground truth pixel size in microns
-stack_size = 40         # Z depth for the PSF
+stack_size = 100         # Z depth for the PSF
 laser_power = 100       # Laser power in ????DADSA?
 # PSF
 # NA = 1.4                # Numerical aperture
@@ -51,11 +51,12 @@ laserPSF = laserPSF / laserPSF.sum()          # Equating to 1. (to do: 1 count =
 ### SAMPLE PARAMETERS ###
 # Made a point in centre of 2D array
 point = np.zeros((xy_size, xy_size, laserPSF.shape[2]))
-point[25, 25, laserPSF.shape[2] // 2 + 19] = 1
-point[75, 75, laserPSF.shape[2] // 2 -19] = 1
+point[25, 25, 1] = 1
+point[75, 75, -1] = 1
 point[laserPSF.shape[0]//2, laserPSF.shape[1]//2, laserPSF.shape[2] // 2] = 1
 
 
+### MAIN PROGRAM ###
 ### STAGE SCANNING SO SAMPLE IS RUN ACROSS THE PSF (OR 'LENS') ###
 scan = np.zeros((laserPSF.shape[1], laserPSF.shape[0], laserPSF.shape[2]))
 laser_illum = np.zeros((laserPSF.shape[1], laserPSF.shape[0], laserPSF.shape[2]))
@@ -79,32 +80,15 @@ for x in range(0, point.shape[1]):
         # Flatten and sum z stack.
         z_sum = np.sum(scan, 2)
 
-        # Multiply by pinhole, which is centered and offset.
-        circle_pinhole = sam.circle_mask(scan, 1, (point.shape[1]//2 + offset, point.shape[0]//2 + offset))  # Produces a simple circle mask centred at x,y.
-        pinhole_sum = z_sum * circle_pinhole
-
         # Add to the collection array
-        sums[:,:,counter] = pinhole_sum
+        sums[:,:,counter] = z_sum
         print("Counter: ", counter)
         counter = counter + 1
-
-### CONFOCAL SUMMING ###
-# Reconstruct the image based on the collected arrays.
-if mode == "confocal":
-    conf_array= np.zeros((100,100))
-
-    for i in range(0, sums.shape[2]-1):
-        conf_array[i%100, i//100] = np.sum(sums[:,:,i])
-        print(i//100, i%100)
-elif mode == "ISM":
-    ###ƒå˚ø˙^¨¨å¨
-    ##  BUILD ME ###
-    sums = sums
 
 
 ### CAMERA SETUP ###
 # Camera sensor, based on optical magnification and pixel size.
-camerapixel_per_groundpixel = (camera_pixel_size) / pixel_size
+camerapixel_per_groundpixel = camera_pixel_size / pixel_size
 
 # Used to determine the number of the ground pixels that exist within each bin
 mag_ratio = camerapixel_per_groundpixel / magnification
@@ -113,23 +97,112 @@ print("Overall Image Binning (ground pixels per bin):", mag_ratio, "by", mag_rat
 
 ### IMAGING TIME ###
 # Initialise an empty array, with a size calculated by the above ratios.
-# Gives us a rounded down number of pixels to bin into to prevent binning half a bin volume into a pixel.
-camera_image = np.zeros((int(conf_array.shape[0] // mag_ratio), int(conf_array.shape[1] // mag_ratio)))
+# Gives us a rounded down number of pixels to bin into to prevent binning half a bin volume into an end pixel.
+binned_image = np.zeros((int(sums.shape[0] // mag_ratio),
+                         int(sums.shape[1] // mag_ratio),
+                         int(sums.shape[2])))
 
 # Iterate each position in the array and average the pixels in the range from the diffraction limited image.
 # We use the mag_ratio to step across the array and select out regions that are multiples of it out.
-for y in range(0, camera_image.shape[0]):
-    for x in range(0, camera_image.shape[1]):
-        pixel_section = conf_array[int(y * mag_ratio):int(y * mag_ratio + mag_ratio),
-                                   int(x * mag_ratio):int(x * mag_ratio + mag_ratio)]
-        camera_image[y, x] = np.sum(pixel_section)  # Take the mean value of the section and bin it to the camera.
-print("Collecting Data")
+for z in range(0, binned_image.shape[2]):
+    for y in range(0, binned_image.shape[0]):
+        for x in range(0, binned_image.shape[1]):
+            # Takes the convoluted and summed data and bins the sections into a new image
+            pixel_section = sums[int(y * mag_ratio):int(y * mag_ratio + mag_ratio),
+                            int(x * mag_ratio):int(x * mag_ratio + mag_ratio),
+                            z]
+            binned_image[y, x, z] = np.sum(pixel_section) # Take the sum value of the section and bin it to the camera.
+            print(x,y,z)
+
+print("Binning Data to Camera")
+
+
+
+
+# Multiply by pinhole, which is centered and offset.
+# Produces a simple circle mask centred at x,y.
+circle_pinhole = sam.circle_mask(binned_image, 1, (binned_image.shape[1] // 2 + offset, binned_image.shape[0] // 2 + offset))
+# Produce an empty array to place the results into.
+pinhole_sum = np.zeros((binned_image.shape[0], binned_image.shape[1], binned_image.shape[2]))
+
+# Multiplies the binned image with the circle pinhole at each z position
+for i in range(0, binned_image.shape[2]):
+    pinhole_sum[:, :, i] = binned_image[:, :, i] * circle_pinhole
+
+
+
 
 # Account for Quantum efficiency.
-camera_image = camera_image * QE
+camera_image = pinhole_sum * QE
 print("QE step")
 
-plt.imshow(camera_image)
+
+
+### CONFOCAL SUMMING ### #### FIX THIS .. ISSUES WITH SPACIAL COMPRESSION IN Z.
+# Reconstruct the image based on the collected arrays.
+if mode == "confocal":
+    # Set up the confocal array and the intermediate array.
+    # The intermediate acts as a holding cell for the array values once summed up. They are returned to their original
+    # position to make the next step easier.
+    conf_array = np.zeros((point.shape[0], point.shape[1]))
+    # intermediate = np.zeroes((xy_size,xy_size))
+    #
+    # # Initially we sum and organise the arrays as in the original image size. This allows us to make a pseudo-replica
+    # # of the original image which we then bin into the correct positions
+    # for i in range(0, pinhole_sum.shape[2] - 1):
+    #     intermediate[i % pinhole_sum.shape[0], i // pinhole_sum.shape[1]] = pinhole_sum[:, :, i]
+    #     print(i // pinhole_sum.shape[1], i % pinhole_sum.shape[0])
+    #
+    # # If the mag_ratio is a float variable then the array will stumble and take steps of different size.
+    # # Hence in such cases we adjust and add on the excess to the right/bottom
+    # # and subtract it from the left/top as needed.
+    #
+    # if mag_ratio - int(mag_ratio) > 0:
+    #     remainder = mag_ratio - int(mag_ratio)
+    #
+    #     for y in range(0, conf_array.shape[0]):
+    #         for x in range(0, conf_array.shape[1]):
+    #             conf_array[y, x] = np.sum(pinhole_sum[int(y * mag_ratio):int(y * mag_ratio + mag_ratio),
+    #                                                   int(x * mag_ratio):int(x * mag_ratio + mag_ratio)])
+    #
+    #             # These next variables collect the next x and y row/column of the same length as the mag array
+    #             array_remainder_top = np.sum(pinhole_sum[int(y * mag_ratio -1),
+    #                                             int(x * mag_ratio):int(x * mag_ratio + mag_ratio)])
+    #             if y * mag_ratio - 1 < 0:
+    #                 array_remainder_top = 0
+    #
+    #             array_remainder_bottom = np.sum(pinhole_sum[int(y * mag_ratio + mag_ratio + 1),
+    #                                             int(x * mag_ratio):int(x * mag_ratio + mag_ratio)])
+    #             if y * mag_ratio + mag_ratio + 1 > 0:
+    #                 array_remainder_bottom = 0
+    #
+    #             array_remainder_left = np.sum(pinhole_sum[int(y * mag_ratio):int(y * mag_ratio + mag_ratio),
+    #                                                      int(x * mag_ratio - 1)])
+    #             array_remainder_right = np.sum(pinhole_sum[int(y * mag_ratio):int(y * mag_ratio + mag_ratio),
+    #                                             int(x * mag_ratio + mag_ratio + 1)])
+    #             array_remainder_bottom_right = np.sum(pinhole_sum[int(y * mag_ratio + mag_ratio + 1),
+    #                                                  int(x * mag_ratio + mag_ratio + 1)])
+    #
+    #             #
+    #
+    #             conf_array[y, x] = conf_array[y, x] +
+    # elif mag_ratio - int(mag_ratio) == 0:
+    for i in range(0, pinhole_sum.shape[2]-1):
+        conf_array[i%point.shape[0], i//point.shape[1]] = np.sum(pinhole_sum[:,:,i])
+        print(i//point.shape[1], i%point.shape[0])
+
+# elif mode == "ISM":
+    ##ƒå˚ø˙^¨¨å¨
+    ### BUILD ME ###
+    # sums = sums
+
+
+
+
+
+
+
+plt.imshow(conf_array)
 plt.show()
 
 # plt.imshow(pinhole)
@@ -150,4 +223,4 @@ plt.show()
 # plt.imshow(pinhole[:,:,position])
 # plt.title("Pinhole")
 # plt.text(-150,-30,"Frame " + str(position) + " of " + str(pinhole.shape[2]))
-plt.show()
+# plt.show()
