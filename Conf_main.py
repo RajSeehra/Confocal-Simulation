@@ -3,6 +3,7 @@ import Confocal_Samurai as sam
 import matplotlib.pyplot as plt
 import microscPSF as msPSF
 from scipy import signal
+from fractions import Fraction
 
 # This program takes a 3D sample and simulates a stage scanning microscope. Hence the sample is 'moved'
 # relative to the detector.
@@ -24,7 +25,7 @@ pinhole_radius = 1        # Radius of the pinhole in pixels.
 offset = 1                # Offsets the pinhole. Doesnt really do much at this stage.
 # CAMERA
 camera_pixel_size = 6   # Camera pixel size in microns. usual sizes = 6 microns or 11 microns
-magnification = 100     # Lens magnification
+magnification = 200     # Lens magnification
 QE = 0.7                # Quantum Efficiency
 # gain = 2                # Camera gain. Usually 2 per incidence photon
 # NOISE
@@ -72,36 +73,38 @@ sums = sam.stage_scanning(laserPSF, point)
 camerapixel_per_groundpixel = camera_pixel_size / pixel_size
 
 # Used to determine the number of the ground pixels that exist within each bin
+# We use the mag_ratio to step across the array and select out regions that are multiples of it out.
 mag_ratio = camerapixel_per_groundpixel / magnification
 print("Overall Image Binning (ground pixels per bin):", mag_ratio, "by", mag_ratio)
 
 
-### IMAGING TIME ###
+##### IMAGING TIME #####
+### UPSCALING ###
+# If the mag_ratio is not a whole number then we have an issue with distributing the values to the new array accurately.
+# The below functions aims to upscale each 2D scan to allow for an integer based binning method.
+
+upscale = 0         # a simple counter to determine if upscaling has been done or not.
+upscaled_sum = 0
+upscale_mag_ratio = 0
+if Fraction(mag_ratio-int(mag_ratio)) != 0:
+    upscaled_sum, upscale_mag_ratio = sam.upscale(sums, mag_ratio)
+    upscale = 1
+
+
+### BINNING ###
 # Initialise an empty array, with a size calculated by the above ratios.
 # Gives us a rounded down number of pixels to bin into to prevent binning half a bin volume into an end pixel.
 # Bins each image collected at the detector to the camera pixel size.
 binned_image = np.zeros((int(sums.shape[0] // mag_ratio),
                          int(sums.shape[1] // mag_ratio),
                          int(sums.shape[2])))
-
 print("Binning Data to Camera")
 
-# Iterate each position in the array and average the pixels in the range from the diffraction limited image.
-# We use the mag_ratio to step across the array and select out regions that are multiples of it out.
+# if upscaling has occured we need to use different variables for the function.
+sums_list = [sums, upscaled_sum]
+mag_ratio_list = [mag_ratio, upscale_mag_ratio]
 
-### TEMPORARY FIX ###
-mag_ratio = int(mag_ratio)
-### TEMPORARY FIX ###
-
-for z in range(0, binned_image.shape[2]):
-    for y in range(0, binned_image.shape[0]):
-        for x in range(0, binned_image.shape[1]):
-            # Takes the convoluted and summed data and bins the sections into a new image
-            pixel_section = sums[int(y * mag_ratio):int(y * mag_ratio + mag_ratio),
-                            int(x * mag_ratio):int(x * mag_ratio + mag_ratio),
-                            z]
-            binned_image[y, x, z] = np.sum(pixel_section) # Take the sum value of the section and bin it to the camera.
-    print(z)
+binned_image = sam.binning(sums_list[upscale], binned_image,mag_ratio_list[upscale])
 
 print("Data Binned")
 

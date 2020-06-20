@@ -3,6 +3,7 @@ import numpy as np
 import os
 import microscPSF as msPSF
 from scipy import signal
+from fractions import Fraction
 
 
 def pixel_cutter(file_name, x_position, y_position, window_size_x=10, window_size_y=10, frame=0):
@@ -305,6 +306,7 @@ def array_multiply(base_array, offset_array, x_pos, y_pos):
 
     return multiplied_array
 
+
 def stage_scanning(laserPSF, point):
     # Produce an array that will receive the data we collect.
     laser_illum = np.zeros((laserPSF.shape[1], laserPSF.shape[0], laserPSF.shape[2]))  # Laser x sample
@@ -335,54 +337,60 @@ def stage_scanning(laserPSF, point):
 
     return sums
 
-#### Work in progress to get more accurate binning ###
-# def binning(sample, xy_size, summed_array, mag_ratio):
-#     # Set up the confocal array and the intermediate array.
-#     # The intermediate acts as a holding cell for the array values once summed up. They are returned to their original
-#     # position to make the next step easier.
-#     conf_array = np.zeros((sample.shape[0], sample.shape[1]))
-#     intermediate = np.zeroes((xy_size,xy_size))
-#
-#     # Initially we sum and organise the arrays as in the original image size. This allows us to make a pseudo-replica
-#     # of the original image which we then bin into the correct positions
-#     for i in range(0, summed_array.shape[2] - 1):
-#         intermediate[i % summed_array.shape[0], i // summed_array.shape[1]] = summed_array[:, :, i]
-#         print(i // summed_array.shape[1], i % summed_array.shape[0])
-#
-#     # If the mag_ratio is a float variable then the array will stumble and take steps of different size.
-#     # Hence in such cases we adjust and add on the excess to the right/bottom
-#     # and subtract it from the left/top as needed.
-#
-#     if mag_ratio - int(mag_ratio) > 0:
-#         remainder = mag_ratio - int(mag_ratio)
-#
-#         for y in range(0, conf_array.shape[0]):
-#             for x in range(0, conf_array.shape[1]):
-#                 conf_array[y, x] = np.sum(summed_array[int(y * mag_ratio):int(y * mag_ratio + mag_ratio),
-#                                                       int(x * mag_ratio):int(x * mag_ratio + mag_ratio)])
-#
-#                 # These next variables collect the next x and y row/column of the same length as the mag array
-#                 array_remainder_top = np.sum(summed_array[int(y * mag_ratio -1),
-#                                                 int(x * mag_ratio):int(x * mag_ratio + mag_ratio)])
-#                 if y * mag_ratio - 1 < 0:
-#                     array_remainder_top = 0
-#
-#                 array_remainder_bottom = np.sum(summed_array[int(y * mag_ratio + mag_ratio + 1),
-#                                                 int(x * mag_ratio):int(x * mag_ratio + mag_ratio)])
-#                 if y * mag_ratio + mag_ratio + 1 > 0:
-#                     array_remainder_bottom = 0
-#
-#                 array_remainder_left = np.sum(summed_array[int(y * mag_ratio):int(y * mag_ratio + mag_ratio),
-#                                                          int(x * mag_ratio - 1)])
-#                 array_remainder_right = np.sum(summed_array[int(y * mag_ratio):int(y * mag_ratio + mag_ratio),
-#                                                 int(x * mag_ratio + mag_ratio + 1)])
-#                 array_remainder_bottom_right = np.sum(summed_array[int(y * mag_ratio + mag_ratio + 1),
-#                                                      int(x * mag_ratio + mag_ratio + 1)])
-#
-#                 #
-#
-#                 # conf_array[y, x] = conf_array[y, x] +
-#     # elif mag_ratio - int(mag_ratio) == 0:
 
+# Takes the scanned data set (sums) and the magnification ratio and upscales the value to produce 2 numbers and an array
+# array_upscale = the value (in each direction) to which the array needs to be upscaled to allow integer based binning.
+# upscale_ground_to_camera_num = the value which we will use to determine the number of pixel from scanned will be later
+#                                used per each bin. e.g. if this were 15, then 15 of the upscaled pixels in x and 15 in
+#                                y will be used to form the square to sum up and be placed into the binned array.
+# upscaling_array = returns an array which is multiplied in x and y by the array_upscale. Pixels from the original array
+#                   are distributed to a subselection of pixels and to maintain the overall value, we assume this
+#                   distribution is equal for all pixels.
+#                   The array is of shape(sums.shape[x]*array_upscale, sums.shape[y]*array_upscale, z)
+def upscale(scanned_data, mag_ratio):
+    # Turn the magfrac into a rational fraction
+    mag_ratio = Fraction(mag_ratio).limit_denominator()
+    # The upscale value for the array.
+    array_upscale = mag_ratio.denominator
+    # The upscale value for the number of pixels to read back.
+    upscale_ground_to_camera_num = mag_ratio.numerator
+
+    upscaling_array = np.zeros((scanned_data.shape[0] * array_upscale, scanned_data.shape[1] * array_upscale, scanned_data.shape[2]))
+    for z in range(0, scanned_data.shape[2]):
+        for y in range(0, scanned_data.shape[0]):
+            for x in range(0, scanned_data.shape[1]):
+                upscaling_array[y * array_upscale:y * array_upscale + array_upscale,
+                                x * array_upscale:x * array_upscale + array_upscale,
+                                z] \
+                                 = scanned_data[y, x, z] / (array_upscale ** 2)
+                print(x, y, z)
+    return upscaling_array, upscale_ground_to_camera_num
+
+
+def binning(sums, bin_array, mag_ratio):
+    """ Forms a binned image from the scanned image and magnification ratio onto an empty bin_array.
+
+    Parameters
+    ----------
+    sums:
+        The summed value array to be binned.
+    bin_array:
+        An empty bin to which the function adds the data to be binned to.
+    mag_ratio:
+        the magnification ratio, usually a division of the ground truth pixel size and the camera pixel size.
+        Further divided by the magnification.
+
+    """
+    for z in range(0, bin_array.shape[2]):
+        for y in range(0, bin_array.shape[0]):
+            for x in range(0, bin_array.shape[1]):
+                # Takes the convoluted and summed data and bins the sections into a new image
+                pixel_section = sums[int(y * mag_ratio):int(y * mag_ratio + mag_ratio),
+                                     int(x * mag_ratio):int(x * mag_ratio + mag_ratio),
+                                     z]
+                bin_array[y, x, z] = np.sum(pixel_section)  # Take the sum value of the section and bin it to the camera.
+        print(z)
+
+    return bin_array
 
 
