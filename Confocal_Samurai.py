@@ -393,4 +393,17 @@ def binning(sums, bin_array, mag_ratio):
 
     return bin_array
 
+### NOISE FUNCTION ###
+
+def read_noise(data, read_mean=2, read_std=2):
+    # Build read noise. Always positive so we take the absolute values.
+    read_noise = np.random.normal(read_mean, read_std / np.sqrt(2), np.shape(data))
+    read_noise= np.abs(read_noise)
+    return read_noise
+
+
+def shot_noise(sqrt_mean_signal, data):
+    shot_noise = np.random.poisson(sqrt_mean_signal, (np.shape(data)))
+    return shot_noise
+
 

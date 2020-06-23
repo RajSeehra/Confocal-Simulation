@@ -16,28 +16,35 @@ from fractions import Fraction
 xy_size = 100           # xy size for both laser and sample.
 pixel_size = 0.02      # Ground truth pixel size in microns
 stack_size = 100         # Z depth for the PSF
-laser_power = 100       # Laser power in ????DADSA?
+laser_power = 100       # Laser power per second in ????DADSA?
+exposure_time = 1       # seconds of exposure
 # PSF
-# NA = 1.4                # Numerical aperture
-# wavelength = 0.600      # Wavelength in microns
+NA = 1.4                # Numerical aperture            ADD ME
+wavelength = 0.600      # Wavelength in microns         ADD ME
 # PINHOLE #
 pinhole_radius = 1        # Radius of the pinhole in pixels.
 offset = 1                # Offsets the pinhole. Doesnt really do much at this stage.
 # CAMERA
 camera_pixel_size = 6   # Camera pixel size in microns. usual sizes = 6 microns or 11 microns
-magnification = 200     # Lens magnification
+magnification = 100     # Lens magnification
 QE = 0.7                # Quantum Efficiency
-# gain = 2                # Camera gain. Usually 2 per incidence photon
+gain = 2                # Camera gain. Usually 2 per incidence photon
 # NOISE
-# read_mean = 2           # Read noise mean level
-# read_std = 2             # Read noise standard deviation level
-# fixed_pattern_deviation = 0.001  # Fixed pattern standard deviation. usually affects 0.1% of pixels.
+read_mean = 2           # Read noise mean level
+read_std = 2             # Read noise standard deviation level
+fixed_pattern_deviation = 0.001  # Fixed pattern standard deviation. usually affects 0.1% of pixels.
 # MODE #
-mode = "confocal"       # Mode refers to whether we are doing confocal or ISM imaging.
+mode = "Confocal"       # Mode refers to whether we are doing confocal or ISM imaging.
 # SAVE
-# Preview = "N"
-# SAVE = "N"  # Save parameter, input Y to save, other parameters will not save.
-# filename = "X"
+Preview = "N"
+SAVE = "N"  # Save parameter, input Y to save, other parameters will not save.
+filename = "X"
+
+### DATA CHECKS ###
+
+
+
+
 
 ###### MAIN PROGRAM ######
 # Order of the program: produce sample and PSF, multiply, convolute and sum them in z for each xy point, bin the images
@@ -100,37 +107,70 @@ binned_image = np.zeros((int(sums.shape[0] // mag_ratio),
                          int(sums.shape[2])))
 print("Binning Data to Camera")
 
-# if upscaling has occured we need to use different variables for the function.
+# If upscaling has occured we need to use different variables for the function.
 sums_list = [sums, upscaled_sum]
 mag_ratio_list = [mag_ratio, upscale_mag_ratio]
 
+# Actual binning step.
 binned_image = sam.binning(sums_list[upscale], binned_image,mag_ratio_list[upscale])
-
 print("Data Binned")
 
+### QUANTUM EFFICIENCY ###
+QE_image = binned_image * QE
+print("QE step")
 
+
+### NOISE ###
+print("Creating noise.")
+read_noise = sam.read_noise(QE_image, read_mean, read_std)
+print("Read noise generated.")
+shot_noise = sam.shot_noise(np.sqrt(laser_power * exposure_time), QE_image)
+print("Shot noise generated.")
+# Fix the seed for fixed pattern noise
+np.random.seed(100)
+fixed_pattern_noise = np.random.normal(1, fixed_pattern_deviation, (QE_image.shape[0], QE_image.shape[1], QE_image.shape[2]))
+print("Fixed Pattern noise generated.")
+# Sum the noises and the image
+noisy_image = (QE_image + read_noise + shot_noise) * fixed_pattern_noise
+print("Combining noises with image. Complete!")
+
+
+### GAIN, COUNT AND INTEGER ###
+# Multiply by gain to convert from successful incidence photons and noise to electrons.
+print("All about them gains.")
+camera_gain = noisy_image * gain
+
+# 100 count added as this is what camera's do.
+print("Count on it.")
+
+camera_plusCount = camera_gain + 100
+
+# Convert to integer as a camera output can only take integers
+# Conversion to: USER INT VALUE 16
+print("Integerising at the detector")
+camera_view = camera_plusCount.astype(np.uint16)
+
+
+### PINHOLE ###
 # Multiply by pinhole, which is centered and offset.
 # Produces a simple circle mask centred at x,y.
-circle_pinhole = sam.circle_mask(binned_image, pinhole_radius,
-                                 (binned_image.shape[1] // 2 + offset, binned_image.shape[0] // 2 + offset))
+print("Time to add our digital pinhole.")
+circle_pinhole = sam.circle_mask(camera_view, pinhole_radius,
+                                 (camera_view.shape[1] // 2 + offset, camera_view.shape[0] // 2 + offset))
 # Produce an empty array to place the results into.
-pinhole_sum = np.zeros((binned_image.shape[0], binned_image.shape[1], binned_image.shape[2]))
+pinhole_sum = np.zeros((camera_view.shape[0], camera_view.shape[1], camera_view.shape[2]))
 
 # Multiplies the binned image with the circle pinhole at each z position.
 # This digitally adds our pinhole to the binned image at the size we desire.
-for i in range(0, binned_image.shape[2]):
-    pinhole_sum[:, :, i] = binned_image[:, :, i] * circle_pinhole
+for i in range(0, camera_view.shape[2]):
+    pinhole_sum[:, :, i] = camera_view[:, :, i] * circle_pinhole
+print("Pinholes added.")
 
 
-# Account for Quantum efficiency.
-# camera_image = pinhole_sum * QE
-# print("QE step")
-
-### Need to add noise, gain etc... here.
-
-### CONFOCAL SUMMING ### #### FIX THIS .. ISSUES WITH SPACIAL COMPRESSION IN Z.
+### CONFOCAL SUMMING ###
 # Reconstruct the image based on the collected arrays.
-if mode == "confocal":
+if mode == "Confocal":
+    print("So it's CONFOCAL imaging time.")
     # Set up the confocal array
     conf_array = np.zeros((point.shape[0], point.shape[1]))
 
@@ -138,15 +178,26 @@ if mode == "confocal":
     for i in range(0, pinhole_sum.shape[2]):
         conf_array[i%point.shape[0], i//point.shape[1]] = np.sum(pinhole_sum[:,:,i])
         print(i//point.shape[1], i%point.shape[0])
+    print("CONFOCAL, DEPLOY IMAGE!!")
 
-# elif mode == "ISM":
+elif mode == "ISM":
+    print("ISM, a wise choice.")
     ##ƒå˚ø˙^¨¨å¨
     ### BUILD ME ###
     # sums = sums
+    print("ISM, I See More? Check the image to find out.")
 
 
-plt.imshow(conf_array)
-plt.show()
+### SAVE, PREVIEW ###
+if Preview == "Y":
+    plt.imshow(conf_array)
+    plt.show()
+
+if SAVE == "Y":
+    print("Saving Image")
+    sam.savetiff(filename+".tif", conf_array)
+    print("Image saved.")
+
 
 # plt.imshow(pinhole)
 # flat = np.sum(pinhole, axis=2)
