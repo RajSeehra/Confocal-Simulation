@@ -52,6 +52,7 @@ def Gaussian_Map(image_size, offset, centre_x, centre_y, width, amplitude):
     return intensity
 
 
+### SAVE/LOADING FUNCTION ###
 def get_file_list(dir):
     # dir = '/ugproj/Raj/Flash4/'
     file_list = []
@@ -60,6 +61,7 @@ def get_file_list(dir):
             file_name = dir + '/' + file
             file_list.append(file_name)
     return file_list
+
 
 # single frame
 def savetiff(file_name, data):
@@ -99,8 +101,50 @@ def savetiffs(file_name, data):
         images.append(Image.fromarray(data[:, :, I]))
         images[0].save(file_name, save_all=True, append_images=images[1:])
 
+### SAMPLE/PSF FUNCTIONS ###
+def emptysphere3D(array, radius, sphere_centre):
+    """ A function that takes an array size, sphere centre and radius and constructs an empty sphere.
 
-def radial_PSF(xy_size, pixel_size=5, stack_size=40):
+    Parameters
+    ----------
+    array : arraylike
+        the size of the array you wish for the sphere to be held in.
+    radius : int
+        the radius of the sphere. uniform in x, y, and z.
+    sphere_centre : tuple
+        the centre coordinates of the sphere.
+
+    Returns
+    ----------
+    ones : ndarray
+        an array of the same size as the input with ones denoting the sphere position values.
+
+    """
+    # PARAMETERS FOR CIRCLE MASK
+    centre_x = sphere_centre[0]
+    centre_y = sphere_centre[1]
+    centre_z = sphere_centre[2]
+    a_x = -centre_x                         # distance of left edge of screen relative to centre x.
+    b_x = array.shape[1] - centre_x         # distance of right edge of screen relative to centre x.
+    a_y = -centre_y                         # distance of top edge of screen relative to centre y.
+    b_y = array.shape[0] - centre_y         # distance of bottom edge of screen relative to centre y.
+    a_z = - centre_z                        # distance of z edge of screen relative to centre z.
+    b_z = array.shape[2] - centre_z         # distance of z edge of screen relative to centre x.
+
+    r = radius
+    # Produce circle mask, ones grid = to original file and cut out.
+    y, x, z = np.ogrid[a_y:b_y, a_x:b_x, a_z:b_z]       # produces a list which collapses to 0 at the centre in x and y
+    mask1 = x*x + y*y + z*z <= r*r                      # produces a true/false array where the centre is true.
+    mask2 = x*x + y*y + z*z - radius*3 <= r*r           # produces a second mask which helps construct our edge.
+    ones= np.zeros((array.shape[1], array.shape[0], array.shape[2]))
+    # combine the two mask to produce a sphere and then cut out the centre.
+    ones[mask2] = 1                     # uses the mask to turn the zeroes to ones in the TRUE zone of mask.
+    ones[mask1] = 0                     # uses the mask to turn the ones to zeroes in the TRUE zone of mask.
+
+    return ones
+
+
+def radial_PSF(xy_size, pixel_size=5, stack_size=40, wavelength = 0.600):
     # Radial PSF
     mp = msPSF.m_params  # Microscope Parameters as defined in microscPSF. Dictionary format.
 
@@ -112,13 +156,13 @@ def radial_PSF(xy_size, pixel_size=5, stack_size=40):
     pv = np.arange(-z_depth, z_depth, pixel_size)  # Creates a 1D array stepping up by denoted pixel size,
     # Essentially stepping in Z.
 
-    psf_xy1 = msPSF.gLXYZFocalScan(mp, pixel_size, xy_size, pv)  # Matrix ordered (Z,Y,X)
+    psf_xy1 = msPSF.gLXYZFocalScan(mp, pixel_size, xy_size, pv, wvl=wavelength)  # Matrix ordered (Z,Y,X)
 
     psf_total = psf_xy1
 
     return psf_total
 
-
+### KERNEL FILTERS FOR SLOW CONVOLUTION ###
 # Can take 2D/3D arrays and kernels and convolute them.
 def kernel_filter(data, matrix):
     image = data
@@ -233,6 +277,7 @@ def kernel_filter_2D(data, matrix):
     return processed_image
 
 
+### PINHOLE MASK ###
 def circle_mask(array, radius, centre_xy):
     # PARAMETERS FOR CIRCLE MASK
     centre_x = centre_xy[0]
@@ -251,7 +296,7 @@ def circle_mask(array, radius, centre_xy):
     ones = ones / np.sum(ones)              # Normalised
     return ones
 
-
+##### MAIN BODY FUNCTIONS #####
 def array_multiply(base_array, offset_array, x_pos, y_pos):
     # Using a cropping system this function multiplies two arrays at a certain position in space.
     offset_array_centre_dist_x = (offset_array.shape[1]) // 2
@@ -405,5 +450,7 @@ def read_noise(data, read_mean=2, read_std=2):
 def shot_noise(sqrt_mean_signal, data):
     shot_noise = np.random.poisson(sqrt_mean_signal, (np.shape(data)))
     return shot_noise
+
+
 
 

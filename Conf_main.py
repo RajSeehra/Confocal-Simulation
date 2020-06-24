@@ -19,8 +19,9 @@ stack_size = 100         # Z depth for the PSF
 laser_power = 100       # Laser power per second in ????DADSA?
 exposure_time = 1       # seconds of exposure
 # PSF
-NA = 1.4                # Numerical aperture            ADD ME
-wavelength = 0.600      # Wavelength in microns         ADD ME
+wavelength = 0.600      # Wavelength in microns
+NA = 1.4                # Numerical aperture
+msPSF.m_params["NA"] = NA   # alters the value of the microscope parameters in microscPSF. Has a default value of 1.4
 # PINHOLE #
 pinhole_radius = 1        # Radius of the pinhole in pixels.
 offset = 1                # Offsets the pinhole. Doesnt really do much at this stage.
@@ -54,7 +55,7 @@ filename = "X"
 # Made a 3D PSF
 # Each pixel = 5 nanometres.
 # Greater xy size the more PSF is contained in the array. 255 seems optimal, but 101 works and is much faster.
-laserPSF = sam.radial_PSF(xy_size, pixel_size, stack_size)
+laserPSF = sam.radial_PSF(xy_size, pixel_size, stack_size, wavelength)
 laserPSF = np.moveaxis(laserPSF, 0, -1)     # The 1st axis was the z-values. Now in order y,x,z.
 
 laserPSF = laserPSF / laserPSF.sum()      # Equating to 1. (to do: 1 count =  1 microwatt, hence conversion to photons.)
@@ -63,10 +64,13 @@ laserPSF = laserPSF / laserPSF.sum()      # Equating to 1. (to do: 1 count =  1 
 ### SAMPLE PARAMETERS ###
 # Made a point in centre of 2D array
 point = np.zeros((xy_size, xy_size, laserPSF.shape[2]))
-point[25, 25, 1] = 1
-point[75, 75, -1] = 1
-point[laserPSF.shape[0]//2, laserPSF.shape[1]//2, laserPSF.shape[2] // 2] = 1
-
+# point[25, 25, 1] = 1
+# point[75, 75, -1] = 1
+# point[laserPSF.shape[0]//2, laserPSF.shape[1]//2, laserPSF.shape[2] // 2] = 1
+# Spherical ground truth
+radius = 40
+sphere_centre = (point.shape[0]//2, point.shape[1]//2, point.shape[2] // 2)
+point = sam.emptysphere3D(point, radius, sphere_centre)
 
 
 ### STAGE SCANNING SO SAMPLE IS RUN ACROSS THE PSF (OR 'LENS') ###
