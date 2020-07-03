@@ -16,14 +16,14 @@ from fractions import Fraction
 xy_size = 100           # xy size for both laser and sample.
 pixel_size = 0.02      # Ground truth pixel size in microns
 stack_size = 100         # Z depth for the PSF
-laser_power = 100       # Laser power per second in ????DADSA?
+laser_power = 100000       # Laser power per second in ????DADSA?
 exposure_time = 1       # seconds of exposure
 # PSF
 wavelength = 0.600      # Wavelength in microns
 NA = 1.4                # Numerical aperture
 msPSF.m_params["NA"] = NA   # alters the value of the microscope parameters in microscPSF. Has a default value of 1.4
 # PINHOLE #
-pinhole_radius = 1        # Radius of the pinhole in pixels.
+pinhole_radius = 3        # Radius of the pinhole in pixels.
 offset = 1                # Offsets the pinhole. Doesnt really do much at this stage.
 # CAMERA
 camera_pixel_size = 6   # Camera pixel size in microns. usual sizes = 6 microns or 11 microns
@@ -35,9 +35,9 @@ read_mean = 2           # Read noise mean level
 read_std = 2             # Read noise standard deviation level
 fixed_pattern_deviation = 0.001  # Fixed pattern standard deviation. usually affects 0.1% of pixels.
 # MODE #
-mode = "Confocal"       # Mode refers to whether we are doing confocal or ISM imaging.
+mode = "Confocal"       # Mode refers to whether we are doing Confocal or ISM imaging.
 # SAVE
-Preview = "N"
+Preview = "Y"
 SAVE = "N"  # Save parameter, input Y to save, other parameters will not save.
 filename = "X"
 
@@ -58,7 +58,7 @@ filename = "X"
 laserPSF = sam.radial_PSF(xy_size, pixel_size, stack_size, wavelength)
 laserPSF = np.moveaxis(laserPSF, 0, -1)     # The 1st axis was the z-values. Now in order y,x,z.
 
-laserPSF = laserPSF / laserPSF.sum()      # Equating to 1. (to do: 1 count =  1 microwatt, hence conversion to photons.)
+laserPSF = (laserPSF / laserPSF.sum()) * laser_power  # Equating to 1. (to do: 1 count =  1 microwatt, hence conversion to photons.)
 
 
 ### SAMPLE PARAMETERS ###
@@ -186,9 +186,21 @@ if mode == "Confocal":
 
 elif mode == "ISM":
     print("ISM, a wise choice.")
-    ##ƒå˚ø˙^¨¨å¨
-    ### BUILD ME ###
-    # sums = sums
+    y = sam.centre_collection(pinhole_sum)
+
+    mag = 3
+    cut_section = np.zeros((3, 3, pinhole_sum.shape[2]))
+    for i in range(0, pinhole_sum.shape[2]):
+        cut_section[:, :, i] = sam.pixel_cutter(pinhole_sum, y[1, i], y[0, i], mag, mag, i)
+        print(i)
+    # z,xc,yc = sam.gaussian_weighting(dataset, y)
+    conf_array = np.zeros((point.shape[0] * mag, point.shape[1] * mag))
+
+    # Iterate through the z stack and sum the values and add them to the appropriate place on the image.
+    for i in range(0, pinhole_sum.shape[2]):
+        conf_array[i % point.shape[0] * mag: i % point.shape[0] * mag + mag,
+        i // point.shape[1] * mag:i // point.shape[1] * mag + mag] = (cut_section[:, :, i])
+        print(i // point.shape[1], i % point.shape[0])
     print("ISM, I See More? Check the image to find out.")
 
 
