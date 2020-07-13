@@ -23,13 +23,14 @@ wavelength = 0.600      # Wavelength in microns
 NA = 1.4                # Numerical aperture
 msPSF.m_params["NA"] = NA   # alters the value of the microscope parameters in microscPSF. Has a default value of 1.4
 # PINHOLE #
-pinhole_radius = 3        # Radius of the pinhole in pixels.
-offset = 1                # Offsets the pinhole. Doesnt really do much at this stage.
+pinhole_radius = 1        # Radius of the pinhole in pixels.
+offset = 0                # Offsets the pinhole. Doesnt really do much at this stage.
 # CAMERA
 camera_pixel_size = 6   # Camera pixel size in microns. usual sizes = 6 microns or 11 microns
 magnification = 100     # Lens magnification
 QE = 0.7                # Quantum Efficiency
 gain = 2                # Camera gain. Usually 2 per incidence photon
+count = 100             # Camera artificial count increase.
 # NOISE
 read_mean = 2           # Read noise mean level
 read_std = 2             # Read noise standard deviation level
@@ -38,8 +39,8 @@ fixed_pattern_deviation = 0.001  # Fixed pattern standard deviation. usually aff
 mode = "Confocal"       # Mode refers to whether we are doing Confocal or ISM imaging.
 # SAVE
 Preview = "Y"
-SAVE = "N"  # Save parameter, input Y to save, other parameters will not save.
-filename = "X"
+SAVE = "N"              # Save parameter, input Y to save, other parameters will not save.
+filename = "Conf_pinhole100_200x200"   # filename without file format as a string, saves as tiff
 
 ### DATA CHECKS ###
 
@@ -51,14 +52,15 @@ filename = "X"
 # Order of the program: produce sample and PSF, multiply, convolute and sum them in z for each xy point, bin the images
 #                       as though they have been magnified to the cameras pixels, then process the data through
 #                       confocal or ISM methods to produce the final image.
+
 ### PSF Generation ###
 # Made a 3D PSF
-# Each pixel = 5 nanometres.
+# Each pixel = x nanometres.
 # Greater xy size the more PSF is contained in the array. 255 seems optimal, but 101 works and is much faster.
 laserPSF = sam.radial_PSF(xy_size, pixel_size, stack_size, wavelength)
 laserPSF = np.moveaxis(laserPSF, 0, -1)     # The 1st axis was the z-values. Now in order y,x,z.
 
-laserPSF = (laserPSF / laserPSF.sum()) * laser_power  # Equating to 1. (to do: 1 count =  1 microwatt, hence conversion to photons.)
+laserPSF = (laserPSF / laserPSF.sum()) * (laser_power * exposure_time)  # Equating to 1. (to do: 1 count =  1 microwatt, hence conversion to photons.)
 
 
 ### SAMPLE PARAMETERS ###
@@ -67,8 +69,8 @@ point = np.zeros((xy_size, xy_size, laserPSF.shape[2]))
 # point[25, 25, 1] = 1
 # point[75, 75, -1] = 1
 # point[laserPSF.shape[0]//2, laserPSF.shape[1]//2, laserPSF.shape[2] // 2] = 1
-# Spherical ground truth
-radius = 40
+## Spherical ground truth  ##
+radius = 80
 sphere_centre = (point.shape[0]//2, point.shape[1]//2, point.shape[2] // 2)
 point = sam.emptysphere3D(point, radius, sphere_centre)
 
@@ -146,8 +148,7 @@ camera_gain = noisy_image * gain
 
 # 100 count added as this is what camera's do.
 print("Count on it.")
-
-camera_plusCount = camera_gain + 100
+camera_plusCount = camera_gain + count
 
 # Convert to integer as a camera output can only take integers
 # Conversion to: USER INT VALUE 16
@@ -188,19 +189,34 @@ elif mode == "ISM":
     print("ISM, a wise choice.")
     y = sam.centre_collection(pinhole_sum)
 
-    mag = 3
+    Cut_out_pinhole = 2 * pinhole_radius
     cut_section = np.zeros((3, 3, pinhole_sum.shape[2]))
     for i in range(0, pinhole_sum.shape[2]):
-        cut_section[:, :, i] = sam.pixel_cutter(pinhole_sum, y[1, i], y[0, i], mag, mag, i)
+        cut_section[:, :, i] = sam.pixel_cutter(pinhole_sum, y[1, i], y[0, i], Cut_out_pinhole, Cut_out_pinhole, i)
         print(i)
-    # z,xc,yc = sam.gaussian_weighting(dataset, y)
-    conf_array = np.zeros((point.shape[0] * mag, point.shape[1] * mag))
 
-    # Iterate through the z stack and sum the values and add them to the appropriate place on the image.
+    # Need upscaling here
+
+    # Reweight the cut up arrays.
+    # z = sam.gaussian_weighting(cut_section)
+
+    # Need downscaling that is less than the upscaling and then array where each 'pixel' = the dwonscaled area.
+
+    # Set up an empty array for the final image which is scaled by the ISM mag value.
+    conf_array = np.zeros((point.shape[0] * Cut_out_pinhole, point.shape[1] * Cut_out_pinhole))
+
+    # Iterate through the z stack and add them to the appropriate place on the image.
     for i in range(0, pinhole_sum.shape[2]):
-        conf_array[i % point.shape[0] * mag: i % point.shape[0] * mag + mag,
-        i // point.shape[1] * mag:i // point.shape[1] * mag + mag] = (cut_section[:, :, i])
+        conf_array[i % point.shape[0] * Cut_out_pinhole: i % point.shape[0] * Cut_out_pinhole + Cut_out_pinhole,
+        i // point.shape[1] * Cut_out_pinhole:i // point.shape[1] * Cut_out_pinhole + Cut_out_pinhole] = (cut_section[:, :, i])
         print(i // point.shape[1], i % point.shape[0])
+
+    # Ensure no negatives.
+    for x in range(0,conf_array.shape[1]):
+        for y in range(0, conf_array.shape[0]):
+            conf_array[y,x] = conf_array[y,x] - count
+            if conf_array[y,x] <= 0:
+                conf_array[y,x] = 0
     print("ISM, I See More? Check the image to find out.")
 
 

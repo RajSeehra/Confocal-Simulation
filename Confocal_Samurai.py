@@ -259,7 +259,7 @@ def circle_mask(array, radius, centre_xy):
     mask = x*x + y*y <= r*r                           # produces a true/false array where the centre is true.
     ones= np.zeros((array.shape[1], array.shape[0]))
     ones[mask] = 1                                    # uses the mask to turn the zeroes to 1 in the TRUE zone of mask.
-    ones = ones / np.sum(ones)              # Normalised
+    # ones = ones / np.sum(ones)              # Normalised, unnecessary?
     return ones
 
 ##### MAIN BODY FUNCTIONS #####
@@ -493,13 +493,13 @@ def centre_collection(dataset):
     return coordinates
 
 
-def gaussian_weighting(dataset, coordinates):
+def gaussian_weighting(dataset):
 
     # for each frame of the dataset we aim to multiply by a gaussian centred on the coordinate value given.
     for z in range(0, dataset.shape[2]):
-        centre_x = coordinates[1, z] - dataset.shape[1]//2 + 1
-        centre_y = coordinates[0, z] - dataset.shape[0]//2 + 1
+        centre_x = dataset.shape[1]//2
+        centre_y = dataset.shape[0]//2
 
-        dataset[:,:,z] = dataset[:,:,z] * (Gaussian_Map(dataset.shape, 0, centre_x, centre_y, 3, 1)/np.max(Gaussian_Map(dataset.shape, 0, centre_x, centre_y, 3, 1)))
+        dataset[:,:,z] = dataset[:,:,z] * (Gaussian_Map(dataset.shape, 0, centre_x, centre_y, 1, 1)/np.max(Gaussian_Map(dataset.shape, 0, centre_x, centre_y, 1, 1)))
 
-    return dataset, centre_x,centre_y
+    return dataset
