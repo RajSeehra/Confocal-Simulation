@@ -1,8 +1,9 @@
 import numpy as np
-import Confocal_Samurai as sam
+import Confocal_Main as confmain
+import Confocal_Processing as proc
+import Data_Check as dc
 import matplotlib.pyplot as plt
 import microscPSF as msPSF
-from scipy import signal
 from fractions import Fraction
 
 # This program takes a 3D sample and simulates a stage scanning microscope. Hence the sample is 'moved'
@@ -24,7 +25,7 @@ NA = 1.4                # Numerical aperture
 msPSF.m_params["NA"] = NA   # alters the value of the microscope parameters in microscPSF. Has a default value of 1.4
 # PINHOLE #
 pinhole_radius = 1        # Radius of the pinhole in pixels.
-offset = 0                # Offsets the pinhole. Doesnt really do much at this stage.
+offset = 0                # Offsets the pinhole. Meant to help increase resolution but needs to be implemented in fourier reweighting..
 # CAMERA
 camera_pixel_size = 6   # Camera pixel size in microns. usual sizes = 6 microns or 11 microns
 magnification = 100     # Lens magnification
@@ -36,16 +37,45 @@ read_mean = 2           # Read noise mean level
 read_std = 2             # Read noise standard deviation level
 fixed_pattern_deviation = 0.001  # Fixed pattern standard deviation. usually affects 0.1% of pixels.
 # MODE #
-mode = "Confocal"       # Mode refers to whether we are doing Confocal or ISM imaging.
+mode = "ISM"       # Mode refers to whether we are doing Confocal or ISM imaging.
 # SAVE
 Preview = "Y"
 SAVE = "N"              # Save parameter, input Y to save, other parameters will not save.
 filename = "Conf_pinhole100_200x200"   # filename without file format as a string, saves as tiff
 
+
 ### DATA CHECKS ###
+xy_size = int(dc.simple_datacheck_lesser_greater(xy_size, 'xy_size', 1, np.inf))
+pixel_size = dc.simple_datacheck_lesser_greater(pixel_size, "pixel_size (in microns)", 0.001, 1)
+stack_size = int(dc.simple_datacheck_lesser_greater(stack_size, "stack_size", 1, np.inf))
+laser_power = dc.simple_datacheck_lesser_greater(laser_power, "laser_poeer", 1, np.inf)
+exposure_time = dc.simple_datacheck_lesser_greater(exposure_time, "exposure_time", 0, np.inf)
+# PSF
+wavelength = dc.simple_datacheck_lesser_greater(wavelength, "wavelength (in microns)", 0, 5)
+NA = dc.simple_datacheck_lesser_greater(NA, "NA", 0.2, 2)
+msPSF.m_params["NA"] = NA   # alters the value of the microscope parameters in microscPSF. Has a default value of 1.4
+# PINHOLE #
+pinhole_radius = dc.simple_datacheck_lesser_greater(pinhole_radius, "pinhole_radius", 0, xy_size)
+offset = int(dc.simple_datacheck_lesser_greater(offset, "offset", 0, 10))
+# CAMERA
+camera_pixel_size = dc.simple_datacheck_lesser_greater(camera_pixel_size, "camera_pixel_size (in microns)", 1, 30)
+magnification = dc.simple_datacheck_lesser_greater(magnification, "magnification", 1, 250)
+QE = dc.simple_datacheck_lesser_greater(QE, "QE", 0, 1)
+gain = dc.simple_datacheck_lesser_greater(gain, "gain", 1, 500)
+count = dc.simple_datacheck_lesser_greater(count, "count", 0, 1000)
+# NOISE
+read_mean = dc.simple_datacheck_lesser_greater(read_mean, "read_mean", 0, 200)
+read_std = dc.simple_datacheck_lesser_greater(read_std, "read_std", 0, 200)
+fixed_pattern_deviation = dc.simple_datacheck_lesser_greater(fixed_pattern_deviation, "fixed_pattern_deviation", 0, 1)
+# MODE #
+mode_options = ["Confocal", "ISM"]
+mode = dc.simple_datacheck_string(mode, "mode", mode_options)
+# SAVE #
+yes_no = ["Y", "N"]
+Preview = dc.simple_datacheck_string(Preview, "Preview", yes_no)
+SAVE = dc.simple_datacheck_string(SAVE, "SAVE", yes_no)
 
-
-
+print("DATA GOOD TO GO!")
 
 
 ###### MAIN PROGRAM ######
@@ -57,10 +87,11 @@ filename = "Conf_pinhole100_200x200"   # filename without file format as a strin
 # Made a 3D PSF
 # Each pixel = x nanometres.
 # Greater xy size the more PSF is contained in the array. 255 seems optimal, but 101 works and is much faster.
-laserPSF = sam.radial_PSF(xy_size, pixel_size, stack_size, wavelength)
+laserPSF = confmain.radial_PSF(xy_size, pixel_size, stack_size, wavelength)
 laserPSF = np.moveaxis(laserPSF, 0, -1)     # The 1st axis was the z-values. Now in order y,x,z.
 
-laserPSF = (laserPSF / laserPSF.sum()) * (laser_power * exposure_time)  # Equating to 1. (to do: 1 count =  1 microwatt, hence conversion to photons.)
+laserPSF = (laserPSF / laserPSF.sum()) * (laser_power * exposure_time)  # Equating to 1. (to do: 1 count =  1 microwatt,
+                                                                                        # hence conversion to photons.)
 
 
 ### SAMPLE PARAMETERS ###
@@ -70,15 +101,15 @@ point = np.zeros((xy_size, xy_size, laserPSF.shape[2]))
 # point[75, 75, -1] = 1
 # point[laserPSF.shape[0]//2, laserPSF.shape[1]//2, laserPSF.shape[2] // 2] = 1
 ## Spherical ground truth  ##
-radius = 80
+radius = 40
 sphere_centre = (point.shape[0]//2, point.shape[1]//2, point.shape[2] // 2)
-point = sam.emptysphere3D(point, radius, sphere_centre)
+point = confmain.emptysphere3D(point, radius, sphere_centre)
 
 
 ### STAGE SCANNING SO SAMPLE IS RUN ACROSS THE PSF (OR 'LENS') ###
 # Takes the psf and sample arrays as inputs and scans across them.
 # Returns an array at the same xy size with a z depth of x*y.
-sums = sam.stage_scanning(laserPSF, point)
+sums = confmain.stage_scanning(laserPSF, point)
 
 
 ### CAMERA SETUP ###
@@ -100,7 +131,7 @@ upscale = 0         # a simple counter to determine if upscaling has been done o
 upscaled_sum = 0
 upscale_mag_ratio = 0
 if Fraction(mag_ratio-int(mag_ratio)) != 0:
-    upscaled_sum, upscale_mag_ratio = sam.upscale(sums, mag_ratio)
+    upscaled_sum, upscale_mag_ratio = confmain.upscale(sums, mag_ratio)
     upscale = 1
 
 
@@ -118,7 +149,7 @@ sums_list = [sums, upscaled_sum]
 mag_ratio_list = [mag_ratio, upscale_mag_ratio]
 
 # Actual binning step.
-binned_image = sam.binning(sums_list[upscale], binned_image,mag_ratio_list[upscale])
+binned_image = confmain.binning(sums_list[upscale], binned_image, mag_ratio_list[upscale])
 print("Data Binned")
 
 ### QUANTUM EFFICIENCY ###
@@ -128,13 +159,15 @@ print("QE step")
 
 ### NOISE ###
 print("Creating noise.")
-read_noise = sam.read_noise(QE_image, read_mean, read_std)
+read_noise = confmain.read_noise(QE_image, read_mean, read_std)
 print("Read noise generated.")
-shot_noise = sam.shot_noise(np.sqrt(laser_power * exposure_time), QE_image)
+shot_noise = confmain.shot_noise(np.sqrt(laser_power * exposure_time), QE_image)
 print("Shot noise generated.")
 # Fix the seed for fixed pattern noise
 np.random.seed(100)
-fixed_pattern_noise = np.random.normal(1, fixed_pattern_deviation, (QE_image.shape[0], QE_image.shape[1], QE_image.shape[2]))
+fixed_pattern_noise = np.random.normal(1, fixed_pattern_deviation, (QE_image.shape[0],
+                                                                    QE_image.shape[1],
+                                                                    QE_image.shape[2]))
 print("Fixed Pattern noise generated.")
 # Sum the noises and the image
 noisy_image = (QE_image + read_noise + shot_noise) * fixed_pattern_noise
@@ -160,8 +193,8 @@ camera_view = camera_plusCount.astype(np.uint16)
 # Multiply by pinhole, which is centered and offset.
 # Produces a simple circle mask centred at x,y.
 print("Time to add our digital pinhole.")
-circle_pinhole = sam.circle_mask(camera_view, pinhole_radius,
-                                 (camera_view.shape[1] // 2 + offset, camera_view.shape[0] // 2 + offset))
+circle_pinhole = proc.circle_mask(camera_view, pinhole_radius,
+                                  (camera_view.shape[1] // 2 + offset, camera_view.shape[0] // 2 + offset))
 # Produce an empty array to place the results into.
 pinhole_sum = np.zeros((camera_view.shape[0], camera_view.shape[1], camera_view.shape[2]))
 
@@ -176,48 +209,19 @@ print("Pinholes added.")
 # Reconstruct the image based on the collected arrays.
 if mode == "Confocal":
     print("So it's CONFOCAL imaging time.")
-    # Set up the confocal array
-    conf_array = np.zeros((point.shape[0], point.shape[1]))
-
-    # Iterate through the z stack and sum the values and add them to the appropriate place on the image.
-    for i in range(0, pinhole_sum.shape[2]):
-        conf_array[i%point.shape[0], i//point.shape[1]] = np.sum(pinhole_sum[:,:,i])
-        print(i//point.shape[1], i%point.shape[0])
+    conf_array = confmain.confocal(pinhole_sum, point)
     print("CONFOCAL, DEPLOY IMAGE!!")
 
 elif mode == "ISM":
     print("ISM, a wise choice.")
-    y = sam.centre_collection(pinhole_sum)
-
-    Cut_out_pinhole = 2 * pinhole_radius
-    cut_section = np.zeros((3, 3, pinhole_sum.shape[2]))
-    for i in range(0, pinhole_sum.shape[2]):
-        cut_section[:, :, i] = sam.pixel_cutter(pinhole_sum, y[1, i], y[0, i], Cut_out_pinhole, Cut_out_pinhole, i)
-        print(i)
-
-    # Need upscaling here
-
-    # Reweight the cut up arrays.
-    # z = sam.gaussian_weighting(cut_section)
-
-    # Need downscaling that is less than the upscaling and then array where each 'pixel' = the dwonscaled area.
-
-    # Set up an empty array for the final image which is scaled by the ISM mag value.
-    conf_array = np.zeros((point.shape[0] * Cut_out_pinhole, point.shape[1] * Cut_out_pinhole))
-
-    # Iterate through the z stack and add them to the appropriate place on the image.
-    for i in range(0, pinhole_sum.shape[2]):
-        conf_array[i % point.shape[0] * Cut_out_pinhole: i % point.shape[0] * Cut_out_pinhole + Cut_out_pinhole,
-        i // point.shape[1] * Cut_out_pinhole:i // point.shape[1] * Cut_out_pinhole + Cut_out_pinhole] = (cut_section[:, :, i])
-        print(i // point.shape[1], i % point.shape[0])
-
-    # Ensure no negatives.
-    for x in range(0,conf_array.shape[1]):
-        for y in range(0, conf_array.shape[0]):
-            conf_array[y,x] = conf_array[y,x] - count
-            if conf_array[y,x] <= 0:
-                conf_array[y,x] = 0
+    conf_array = confmain.ISM(pinhole_sum, point, pinhole_radius)
     print("ISM, I See More? Check the image to find out.")
+
+else:
+    # Will become redundant once checks are in place.
+    print("You didn't select an appropriate reconstruction form...")
+    print("To save you some time we are outputting the Confocal based reconstruction of the image.")
+    conf_array = confmain.confocal(pinhole_sum, point)
 
 
 ### SAVE, PREVIEW ###
@@ -227,7 +231,7 @@ if Preview == "Y":
 
 if SAVE == "Y":
     print("Saving Image")
-    sam.savetiff(filename+".tif", conf_array)
+    proc.savetiff(filename+".tif", conf_array)
     print("Image saved.")
 
 
