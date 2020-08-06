@@ -1,14 +1,15 @@
+# Needs evaluation to allow greater data checking simultaneously.
 def dict_datacheck_lesser_greater(data, lesser_values, greater_values):
-    ''' Will take a dictionary of variables and check if the check variable is in the ranges prescribed by the function.
+    """ Will take a dictionary of variables and check if the check variable is in the ranges prescribed by the function.
 
     :param data:
         The dictionary containing the variables to be checked.
-    :param lesser_value:
+    :param lesser_values:
         The minimum value for the variable in question.
-    :param greater_value:
+    :param greater_values:
         The maximum value for the variable.
     :return:
-    '''
+    """
     check_variable_names = [key for key in data.keys()]
 
     for i in range(0, len(check_variable_names)):
@@ -19,7 +20,8 @@ def dict_datacheck_lesser_greater(data, lesser_values, greater_values):
         greater_value = float(greater_values[i])
 
         while test_variable < lesser_value or test_variable > greater_value:
-            data[check_variable_name] = input(check_variable_name + " is not in the range expected:" + str(lesser_value) + "-" + str(greater_value))
+            data[check_variable_name] = input(check_variable_name + " is not in the range expected:"
+                                              + str(lesser_value) + "-" + str(greater_value))
             try:
                 test_variable = float(data[check_variable_name])
 

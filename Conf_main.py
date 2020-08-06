@@ -1,5 +1,5 @@
 import numpy as np
-import Confocal_Main as confmain
+import Confocal_Main_Func as confmain
 import Confocal_Processing as proc
 import Data_Check as dc
 import matplotlib.pyplot as plt
@@ -14,9 +14,9 @@ from fractions import Fraction
 
 ### INPUTS ###
 #  Laser, PSF and Sample #
-xy_size = 100           # xy size for both laser and sample.
+xy_size = 200           # xy size for both laser and sample.
 pixel_size = 0.02      # Ground truth pixel size in microns
-stack_size = 100         # Z depth for the PSF
+stack_size = 200         # Z depth for the PSF
 laser_power = 100000       # Laser power per second in ????DADSA?
 exposure_time = 1       # seconds of exposure
 # PSF
