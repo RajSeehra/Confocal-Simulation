@@ -14,17 +14,19 @@ from fractions import Fraction
 
 ### INPUTS ###
 #  Laser, PSF and Sample #
-xy_size = 200           # xy size for both laser and sample.
+xy_size = 100           # xy size for both laser and sample.
 pixel_size = 0.02      # Ground truth pixel size in microns
-stack_size = 200         # Z depth for the PSF
-laser_power = 100000       # Laser power per second in ????DADSA?
+stack_size = 100         # Z depth for the PSF
+laser_power = 10000000       # Laser power per second in should be microwatts where 1 count = 1 microwatt. average in live cell is 15000 microwatt
 exposure_time = 1       # seconds of exposure
 # PSF
-wavelength = 0.600      # Wavelength in microns
+excitation_wavelength = 0.540    # Wavelength in microns
+emission_wavelength = 0.480      # Wavelength in microns
 NA = 1.4                # Numerical aperture
+### Dont touch the below line ###
 msPSF.m_params["NA"] = NA   # alters the value of the microscope parameters in microscPSF. Has a default value of 1.4
 # PINHOLE #
-pinhole_radius = 1        # Radius of the pinhole in pixels.
+pinhole_radius = 3        # Radius of the pinhole in pixels.
 offset = 0                # Offsets the pinhole. Meant to help increase resolution but needs to be implemented in fourier reweighting..
 # CAMERA
 camera_pixel_size = 6   # Camera pixel size in microns. usual sizes = 6 microns or 11 microns
@@ -37,7 +39,7 @@ read_mean = 2           # Read noise mean level
 read_std = 2             # Read noise standard deviation level
 fixed_pattern_deviation = 0.001  # Fixed pattern standard deviation. usually affects 0.1% of pixels.
 # MODE #
-mode = "ISM"       # Mode refers to whether we are doing Confocal or ISM imaging.
+mode = "Confocal"       # Mode refers to whether we are doing Confocal or ISM imaging.
 # SAVE
 Preview = "Y"
 SAVE = "N"              # Save parameter, input Y to save, other parameters will not save.
@@ -51,7 +53,8 @@ stack_size = int(dc.simple_datacheck_lesser_greater(stack_size, "stack_size", 1,
 laser_power = dc.simple_datacheck_lesser_greater(laser_power, "laser_poeer", 1, np.inf)
 exposure_time = dc.simple_datacheck_lesser_greater(exposure_time, "exposure_time", 0, np.inf)
 # PSF
-wavelength = dc.simple_datacheck_lesser_greater(wavelength, "wavelength (in microns)", 0, 5)
+emission_wavelength = dc.simple_datacheck_lesser_greater(emission_wavelength, "wavelength (in microns)", 0, 5)
+excitation_wavelength = dc.simple_datacheck_lesser_greater(excitation_wavelength, "wavelength (in microns)", 0, 5)
 NA = dc.simple_datacheck_lesser_greater(NA, "NA", 0.2, 2)
 msPSF.m_params["NA"] = NA   # alters the value of the microscope parameters in microscPSF. Has a default value of 1.4
 # PINHOLE #
@@ -87,7 +90,7 @@ print("DATA GOOD TO GO!")
 # Made a 3D PSF
 # Each pixel = x nanometres.
 # Greater xy size the more PSF is contained in the array. 255 seems optimal, but 101 works and is much faster.
-laserPSF = confmain.radial_PSF(xy_size, pixel_size, stack_size, wavelength)
+laserPSF = confmain.radial_PSF(xy_size, pixel_size, stack_size, excitation_wavelength)
 laserPSF = np.moveaxis(laserPSF, 0, -1)     # The 1st axis was the z-values. Now in order y,x,z.
 
 laserPSF = (laserPSF / laserPSF.sum()) * (laser_power * exposure_time)  # Equating to 1. (to do: 1 count =  1 microwatt,
@@ -104,12 +107,23 @@ point = np.zeros((xy_size, xy_size, laserPSF.shape[2]))
 radius = 40
 sphere_centre = (point.shape[0]//2, point.shape[1]//2, point.shape[2] // 2)
 point = confmain.emptysphere3D(point, radius, sphere_centre)
+## More Complex Spherical Ground Truth ##
+# sample = point
+# sample = confmain.emptysphere3D(sample, int(sample.shape[0]*0.4), (sample.shape[1]//2, sample.shape[0]//2, sample.shape[2]//2))
+# sample2 = confmain.emptysphere3D(sample, int(sample.shape[0]*0.25), (sample.shape[1]//2.5, sample.shape[0]//2.5, sample.shape[2]//2.5))
+# sample3 = confmain.emptysphere3D(sample, int(sample.shape[0]*0.05), (sample.shape[1]//1.4, sample.shape[0]//1.4, sample.shape[2]//1.7))
+# sample4 = confmain.emptysphere3D(sample, int(sample.shape[0]*0.05), (sample.shape[1]//2.5, sample.shape[0]//1.4, sample.shape[2]//1.4))
+# point = sample+sample2+sample3+sample4
 
 
 ### STAGE SCANNING SO SAMPLE IS RUN ACROSS THE PSF (OR 'LENS') ###
+# Establish the PSF of the emission wwavelength as the light passes through the lens after scanning
+emission_PSF = confmain.radial_PSF(xy_size, pixel_size, stack_size, emission_wavelength)
+emission_PSF = np.moveaxis(emission_PSF, 0, -1)     # The 1st axis was the z-values. Now in order y,x,z.
+emission_PSF = (emission_PSF / emission_PSF.sum())  # Equating to 1. (to do: 1 count =  1 microwatt, hence conversion to photons.)
 # Takes the psf and sample arrays as inputs and scans across them.
 # Returns an array at the same xy size with a z depth of x*y.
-sums = confmain.stage_scanning(laserPSF, point)
+sums = confmain.stage_scanning(laserPSF, point, emission_PSF)
 
 
 ### CAMERA SETUP ###
@@ -161,8 +175,6 @@ print("QE step")
 print("Creating noise.")
 read_noise = confmain.read_noise(QE_image, read_mean, read_std)
 print("Read noise generated.")
-shot_noise = confmain.shot_noise(np.sqrt(laser_power * exposure_time), QE_image)
-print("Shot noise generated.")
 # Fix the seed for fixed pattern noise
 np.random.seed(100)
 fixed_pattern_noise = np.random.normal(1, fixed_pattern_deviation, (QE_image.shape[0],
@@ -170,7 +182,7 @@ fixed_pattern_noise = np.random.normal(1, fixed_pattern_deviation, (QE_image.sha
                                                                     QE_image.shape[2]))
 print("Fixed Pattern noise generated.")
 # Sum the noises and the image
-noisy_image = (QE_image + read_noise + shot_noise) * fixed_pattern_noise
+noisy_image = (QE_image + read_noise) * fixed_pattern_noise
 print("Combining noises with image. Complete!")
 
 

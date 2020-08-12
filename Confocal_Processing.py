@@ -97,11 +97,11 @@ def pixel_cutter(array, x_position, y_position, window_size_x=10, window_size_y=
     # imgArray[:, :, frame] = img
     # img.close()
 
-    # Assign centre and ascertain coords for image, the -1 is to ensure even spreading either side of the centre point.
-    xcoordmin = x_position - int(x / 2)
-    xcoordmax = x_position + int(x / 2)+1
-    ycoordmin = y_position - int(y / 2)
-    ycoordmax = y_position + int(y / 2)+1
+    # Assign centre and ascertain coords for image, the +0.5 is to ensure even spreading either side of the centre point
+    xcoordmin = x_position - int(x // 2)
+    xcoordmax = x_position + int((x / 2)+0.5)
+    ycoordmin = y_position - int(y // 2)
+    ycoordmax = y_position + int((y / 2)+0.5)
 
     # check no negative numbers
     if xcoordmin < 0:

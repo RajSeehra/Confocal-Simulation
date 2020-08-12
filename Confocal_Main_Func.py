@@ -42,7 +42,7 @@ def emptysphere3D(array, radius, sphere_centre):
     y, x, z = np.ogrid[a_y:b_y, a_x:b_x, a_z:b_z]       # produces a list which collapses to 0 at the centre in x and y
     mask1 = x*x + y*y + z*z <= r*r                      # produces a true/false array where the centre is true.
     mask2 = x*x + y*y + z*z - radius*3 <= r*r           # produces a second mask which helps construct our edge.
-    ones= np.zeros((array.shape[1], array.shape[0], array.shape[2]))
+    ones= np.zeros((array.shape[0], array.shape[1], array.shape[2]))
     # combine the two mask to produce a sphere and then cut out the centre.
     ones[mask2] = 1                     # uses the mask to turn the zeroes to ones in the TRUE zone of mask.
     ones[mask1] = 0                     # uses the mask to turn the ones to zeroes in the TRUE zone of mask.
@@ -125,12 +125,11 @@ def array_multiply(base_array, offset_array, x_pos, y_pos):
     return multiplied_array
 
 
-def stage_scanning(laserPSF, point):
+def stage_scanning(laserPSF, point, emission_PSF):
     # Produce an array that will receive the data we collect.
     laser_illum = np.zeros((laserPSF.shape[1], laserPSF.shape[0], laserPSF.shape[2]))  # Laser x sample
     scan = np.zeros((laserPSF.shape[1], laserPSF.shape[0], laserPSF.shape[2]))         # Laser illum conv w/ psf
     sums = np.zeros((point.shape[1], point.shape[0], int(point.shape[1] * point.shape[0])))  # z sum of scan.
-
     # Counter to track our z position/frame.
     counter = 0
 
@@ -140,9 +139,17 @@ def stage_scanning(laserPSF, point):
             # Multiplies the PSF multiplied laser with the sample. The centre of the sample is moved to position x,y
             # on the laser array, as this is a stage scanning microscope.
             laser_illum = array_multiply(laserPSF, point, x, y)
+
+            # Add Shot Noise to the laser Illumination.
+            mean_signal = np.mean(laser_illum)
+            s_noise = shot_noise(np.sqrt(laser_illum), laser_illum)
+            print("Shot noise generated.")
+            laser_illum = laser_illum + s_noise
+            print("Shot noise added.")
+
             # Convolute the produced array with the PSF to simulate the second lens.
             for i in range(0, point.shape[2]):
-                scan[:,:,i] = np.rot90(signal.fftconvolve(laserPSF[:,:,i], laser_illum[:,:,i], mode="same"),2)
+                scan[:,:,i] = np.rot90(signal.fftconvolve(emission_PSF[:,:,i], laser_illum[:,:,i], mode="same"),2)
                 # scan[:,:,i] = np.rot90(sam.kernel_filter_2D(laserPSF[:, :, i], laser_illum[:, :, i]), 2)        # When running a larger image over a smaller one it rotates the resulting info.
             print("x:", x, " and y:", y)
             # Flatten and sum z stack.
@@ -243,12 +250,12 @@ def ISM(pinhole_sum, point, pinhole_radius, scale=16):
     y = proc.centre_collection(pinhole_sum)
 
     Cut_out_pinhole = 2 * pinhole_radius
-    cut_section = np.zeros((3, 3, pinhole_sum.shape[2]))
+    cut_section = np.zeros((pinhole_radius*2, pinhole_radius*2, pinhole_sum.shape[2]))
     for i in range(0, pinhole_sum.shape[2]):
         cut_section[:, :, i] = proc.pixel_cutter(pinhole_sum, y[1, i], y[0, i], Cut_out_pinhole, Cut_out_pinhole, i)
         print("cutting:", i)
 
-    scale = 16
+    scale = scale
     # The final image is initially at an arbitrary value greater than the original image.
     final_image = np.zeros((point.shape[0] * scale, point.shape[1] * scale))
 
