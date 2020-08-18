@@ -20,8 +20,8 @@ stack_size = 100         # Z depth for the PSF
 laser_power = 10000000       # Laser power per second in should be microwatts where 1 count = 1 microwatt. average in live cell is 15000 microwatt
 exposure_time = 1       # seconds of exposure
 # PSF
-excitation_wavelength = 0.540    # Wavelength in microns
-emission_wavelength = 0.480      # Wavelength in microns
+excitation_wavelength = 0.480    # Wavelength in microns
+emission_wavelength = 0.540      # Wavelength in microns
 NA = 1.4                # Numerical aperture
 ### Dont touch the below line ###
 msPSF.m_params["NA"] = NA   # alters the value of the microscope parameters in microscPSF. Has a default value of 1.4
@@ -39,7 +39,7 @@ read_mean = 2           # Read noise mean level
 read_std = 2             # Read noise standard deviation level
 fixed_pattern_deviation = 0.001  # Fixed pattern standard deviation. usually affects 0.1% of pixels.
 # MODE #
-mode = "Confocal"       # Mode refers to whether we are doing Confocal or ISM imaging.
+mode = "Confocal"       # Mode refers to whether we are doing "Brightfield NEED TO ADD", Confocal or ISM imaging.
 # SAVE
 Preview = "Y"
 SAVE = "N"              # Save parameter, input Y to save, other parameters will not save.
@@ -104,16 +104,16 @@ point = np.zeros((xy_size, xy_size, laserPSF.shape[2]))
 # point[75, 75, -1] = 1
 # point[laserPSF.shape[0]//2, laserPSF.shape[1]//2, laserPSF.shape[2] // 2] = 1
 ## Spherical ground truth  ##
-radius = 40
-sphere_centre = (point.shape[0]//2, point.shape[1]//2, point.shape[2] // 2)
-point = confmain.emptysphere3D(point, radius, sphere_centre)
+# radius = 40
+# sphere_centre = (point.shape[0]//2, point.shape[1]//2, point.shape[2] // 2)
+# point = confmain.emptysphere3D(point, radius, sphere_centre)
 ## More Complex Spherical Ground Truth ##
-# sample = point
-# sample = confmain.emptysphere3D(sample, int(sample.shape[0]*0.4), (sample.shape[1]//2, sample.shape[0]//2, sample.shape[2]//2))
-# sample2 = confmain.emptysphere3D(sample, int(sample.shape[0]*0.25), (sample.shape[1]//2.5, sample.shape[0]//2.5, sample.shape[2]//2.5))
-# sample3 = confmain.emptysphere3D(sample, int(sample.shape[0]*0.05), (sample.shape[1]//1.4, sample.shape[0]//1.4, sample.shape[2]//1.7))
-# sample4 = confmain.emptysphere3D(sample, int(sample.shape[0]*0.05), (sample.shape[1]//2.5, sample.shape[0]//1.4, sample.shape[2]//1.4))
-# point = sample+sample2+sample3+sample4
+sample = point
+sample = confmain.emptysphere3D(sample, int(sample.shape[0]*0.4), (sample.shape[1]//2, sample.shape[0]//2, sample.shape[2]//2))
+sample2 = confmain.emptysphere3D(sample, int(sample.shape[0]*0.25), (sample.shape[1]//2.5, sample.shape[0]//2.5, sample.shape[2]//2.5))
+sample3 = confmain.emptysphere3D(sample, int(sample.shape[0]*0.05), (sample.shape[1]//1.4, sample.shape[0]//1.4, sample.shape[2]//1.7))
+sample4 = confmain.emptysphere3D(sample, int(sample.shape[0]*0.05), (sample.shape[1]//2.5, sample.shape[0]//1.4, sample.shape[2]//1.4))
+point = sample+sample2+sample3+sample4
 
 
 ### STAGE SCANNING SO SAMPLE IS RUN ACROSS THE PSF (OR 'LENS') ###
@@ -165,6 +165,7 @@ mag_ratio_list = [mag_ratio, upscale_mag_ratio]
 # Actual binning step.
 binned_image = confmain.binning(sums_list[upscale], binned_image, mag_ratio_list[upscale])
 print("Data Binned")
+
 
 ### QUANTUM EFFICIENCY ###
 QE_image = binned_image * QE
@@ -247,22 +248,3 @@ if SAVE == "Y":
     print("Image saved.")
 
 
-# plt.imshow(pinhole)
-# flat = np.sum(pinhole, axis=2)
-### PLOTTING ###
-# plt.imshow(flat)
-# position = 100
-# plt.subplot(141)
-# plt.imshow(point[:,:,2])
-# plt.title("Point")
-# plt.subplot(142)
-# plt.imshow(radPSF[:,:,position])
-# plt.title("Radial PSF")
-# plt.subplot(143)
-# plt.imshow(scan[:,:,position])
-# plt.title("Scanned")
-# plt.subplot(144)
-# plt.imshow(pinhole[:,:,position])
-# plt.title("Pinhole")
-# plt.text(-150,-30,"Frame " + str(position) + " of " + str(pinhole.shape[2]))
-# plt.show()

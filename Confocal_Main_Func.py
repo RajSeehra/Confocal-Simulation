@@ -149,7 +149,7 @@ def stage_scanning(laserPSF, point, emission_PSF):
 
             # Convolute the produced array with the PSF to simulate the second lens.
             for i in range(0, point.shape[2]):
-                scan[:,:,i] = np.rot90(signal.fftconvolve(emission_PSF[:,:,i], laser_illum[:,:,i], mode="same"),2)
+                scan[:,:,i] = signal.fftconvolve(emission_PSF[:,:,i], laser_illum[:,:,i], mode="same")
                 # scan[:,:,i] = np.rot90(sam.kernel_filter_2D(laserPSF[:, :, i], laser_illum[:, :, i]), 2)        # When running a larger image over a smaller one it rotates the resulting info.
             print("x:", x, " and y:", y)
             # Flatten and sum z stack.
@@ -228,6 +228,7 @@ def read_noise(data, read_mean=2, read_std=2):
 
 
 def shot_noise(sqrt_mean_signal, data):
+    np.random.seed(100)
     shot_noise = np.random.poisson(sqrt_mean_signal, (np.shape(data)))
     return shot_noise
 

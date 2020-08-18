@@ -2,12 +2,17 @@ import numpy as np
 from fractions import Fraction
 import matplotlib.pyplot as plt
 import Confocal_Samurai as sam
+import Confocal_Main_Func as conf
+import Confocal_Processing as proc
 from scipy import signal
 from PIL import Image
 import microscPSF as msc
 from multiprocessing import pool
 from scipy.stats import binned_statistic_2d
 from skimage.transform import resize
+import time
+import multiprocessing as mp
+
 
 # psf = sam.radial_PSF(100, 0.02, 100)
 # laserPSF = np.moveaxis(psf, 0, -1)     # The 1st axis was the z-values. Now in order y,x,z.
@@ -26,7 +31,7 @@ from skimage.transform import resize
 # sam.binning(sums, binned_image, mag_ratio)
 
 # np.ra
-
+#
 def dict_datacheck_lesser_greater(data, lesser_values, greater_values):
     ''' Will take a dictionary of variables and check if the check variable is in the ranges prescribed by the function.
 
@@ -104,12 +109,223 @@ def simple_datacheck_string(variable, variable_name, string_options):
 
     return test_data
 
-mode = -0
-cheese = 200
-string_mode = ["Confocal", "ISM"]
-# mode = simple_datacheck_string(mode,'mode', string_mode)
-# print (mode)
-mode = simple_datacheck_lesser_greater(mode, "mode", -10, np.inf)
+
+def stage_scanning(laserPSF, point, emission_PSF):
+    # Produce an array that will receive the data we collect.
+    laser_illum = np.zeros((laserPSF.shape[1], laserPSF.shape[0], laserPSF.shape[2]))  # Laser x sample
+    scan = np.zeros((laserPSF.shape[1], laserPSF.shape[0], laserPSF.shape[2]))         # Laser illum conv w/ psf
+    sums = np.zeros((point.shape[1], point.shape[0], int(point.shape[1] * point.shape[0])))  # z sum of scan.
+    # Counter to track our z position/frame.
+    counter = 0
+
+    # Iterates across the array to produce arrays illuminated by the sample, with a laser blurred by the first lens.
+    for x in range(0, point.shape[1]):
+        for y in range(0, point.shape[0]):
+            # Multiplies the PSF multiplied laser with the sample. The centre of the sample is moved to position x,y
+            # on the laser array, as this is a stage scanning microscope.
+            laser_illum = conf.array_multiply(laserPSF, point, x, y)
+
+            # Add Shot Noise to the laser Illumination.
+            mean_signal = np.mean(laser_illum)
+            s_noise = conf.shot_noise(np.sqrt(laser_illum), laser_illum)
+            print("Shot noise generated.")
+            laser_illum = laser_illum + s_noise
+            print("Shot noise added.")
+
+            # Convolute the produced array with the PSF to simulate the second lens.
+            for i in range(0, point.shape[2]):
+                scan[:,:,i] = signal.fftconvolve(emission_PSF[:,:,i], laser_illum[:,:,i], mode="same")
+                # scan[:,:,i] = np.rot90(sam.kernel_filter_2D(laserPSF[:, :, i], laser_illum[:, :, i]), 2)        # When running a larger image over a smaller one it rotates the resulting info.
+            print("x:", x, " and y:", y)
+            # Flatten and sum z stack.
+            z_sum = np.sum(scan, 2)
+
+            # Add to the collection array
+            sums[:,:,counter] = z_sum
+            print("Counter: ", counter)
+            counter = counter + 1
+
+    return sums
+
+
+
+
+def convolve(emission, laser):
+    scany = signal.fftconvolve(emission,laser, mode='same')
+    return scany
+
+
+def doit():
+    items = [(emission_PSF[:,:,i],laser_illum[:,:,i]) for i in range(emission_PSF.shape[2])]
+    start = time.time()
+    pool = mp.Pool(mp.cpu_count())
+    results = pool.starmap(convolve, items)
+    pool.close()
+    end = time.time()
+    print(end - start)
+
+    return results
+
+
+if __name__ == '__main__':
+    xy = 930
+    z = 20
+
+    laserPSF = conf.radial_PSF(xy, 0.02, z, 0.540)
+    laserPSF = np.moveaxis(laserPSF, 0, -1)  # The 1st axis was the z-values. Now in order y,x,z.
+
+    laserPSF = (laserPSF / laserPSF.sum()) * (10000 * 1)
+
+    emission_PSF = conf.radial_PSF(xy, 0.02, z, 0.480)
+    emission_PSF = np.moveaxis(emission_PSF, 0, -1)  # The 1st axis was the z-values. Now in order y,x,z.
+    emission_PSF = (emission_PSF / emission_PSF.sum())
+
+    sample = np.zeros((xy, xy, z))
+
+    sample = conf.emptysphere3D(sample, int(sample.shape[0] * 0.45),
+                                (sample.shape[1] // 2, sample.shape[0] // 2, sample.shape[2] // 2))
+    sample2 = conf.emptysphere3D(sample, int(sample.shape[0] * 0.25),
+                                 (sample.shape[1] // 2.5, sample.shape[0] // 2.5, sample.shape[2] // 2.5))
+    sample3 = conf.emptysphere3D(sample, int(sample.shape[0] * 0.05),
+                                 (sample.shape[1] // 1.4, sample.shape[0] // 1.4, sample.shape[2] // 1.7))
+    sample4 = conf.emptysphere3D(sample, int(sample.shape[0] * 0.05),
+                                 (sample.shape[1] // 2.5, sample.shape[0] // 1.4, sample.shape[2] // 1.4))
+
+    point = sample + sample2 + sample3 + sample4
+
+    # EDIT
+
+    scan = np.zeros((laserPSF.shape[1], laserPSF.shape[0], laserPSF.shape[2]))  # Laser illum conv w/ psf
+    sums = np.zeros((point.shape[1], point.shape[0], int(point.shape[1] * point.shape[0])))  # z sum of scan.
+    # Counter to track our z position/frame.
+    counter = 0
+
+    x = 25
+    y = 25
+
+    laser_illum = conf.array_multiply(laserPSF, point, x, y)
+
+    # Add Shot Noise to the laser Illumination.
+    s_noise = conf.shot_noise(np.sqrt(laser_illum), laser_illum)
+    # print("Shot noise generated.")
+    laser_illum = laser_illum + s_noise
+    print("Shot noise added.")
+
+    # Old
+    start = time.time()
+    for i in range(0, point.shape[2]):
+        scan[:, :, i] = signal.fftconvolve(emission_PSF[:, :, i], laser_illum[:, :, i], mode="same")
+    end = time.time()
+    print(end-start)
+    results = scan
+    z_sum = np.sum(results, 2)
+
+    # New
+    results2 = doit()
+    z_sum_2 = np.sum(results2, 0)
+
+
+    items = [(emission_PSF[:,:,i],laser_illum[:,:,i]) for i in range(emission_PSF.shape[2])]
+    print(np.sum(emission_PSF[:,:,0]), np.sum(laser_illum[:,:,0]))
+    a,b = items[0]
+    c = emission_PSF[:,:,0] - a
+    d = laser_illum[:,:,0] - b
+    c1 = np.sum(c)
+    d1 = np.sum(d)
+
+    # 0.033296035829118414 good
+    # 0.22621940709885408 bad
+
+    plt.subplot(121)
+    plt.imshow(z_sum)
+    plt.subplot(122)
+    plt.imshow(z_sum_2)
+    plt.show()
+
+
+# data = np.concatenate((emission_PSF, laser_illum),0)
+
+# start = time.time()
+# pool = Pool(4)
+# for _ in range(100):
+#     print("a")
+#     pool.map(f, zip(emission_PSF, laser_illum))
+#
+# end = time.time()
+# print(end-start)
+
+# print("x:", x, " and y:", y)
+# # Flatten and sum z stack.
+# z_sum = np.sum(scan, 2)
+#
+# # Add to the collection array
+# sums[:,:,counter] = z_sum
+# print("Counter: ", counter)
+
+# END EDIT
+#x = conf.stage_scanning(laserPSF,point, emission_PSF)
+
+# dif = end - start
+# avg = dif/ 10000
+
+# y = conf.confocal(x,point)
+# plt.imshow(y)
+# plt.show()
+
+
+# laserPSF = conf.radial_PSF(50, 0.02, 50, 0.540)
+# laserPSF = np.moveaxis(laserPSF, 0, -1)     # The 1st axis was the z-values. Now in order y,x,z.
+#
+# laserPSF = (laserPSF / laserPSF.sum()) * (10000 * 1)
+#
+# emission_PSF = conf.radial_PSF(50, 0.02, 50, 0.480)
+# emission_PSF = np.moveaxis(emission_PSF, 0, -1)     # The 1st axis was the z-values. Now in order y,x,z.
+# emission_PSF = (emission_PSF / emission_PSF.sum())
+#
+# x=25
+# y=25
+#
+# laser_illum = conf.array_multiply(laserPSF, point, x, y)
+#
+# # Add Shot Noise to the laser Illumination.
+# mean_signal = np.mean(laser_illum)
+# s_noise = conf.shot_noise(np.sqrt(laser_illum), laser_illum)
+# print("Shot noise generated.")
+# laser_illum2 = laser_illum + s_noise
+# print("Shot noise added.")
+#
+# plt.subplot(131)
+# plt.imshow(laser_illum2[:,:,25])
+# plt.subplot(132)
+# plt.imshow(s_noise[:,:,25])
+# plt.subplot(133)
+# plt.imshow(laser_illum[:,:,25])
+# plt.show()
+#
+#
+#
+
+# for i in range(0, sample.shape[2],sample.shape[2]//25):
+#     plt.subplot(5,5,i//(sample.shape[2]//25)+1)
+#     plt.imshow(samplex[:,:,i])
+#
+#
+#
+
+# plt.subplot(221)
+# plt.imshow(sample4[:,:,5])
+# plt.subplot(222)
+# plt.imshow(sample4[:,:,10])
+# plt.subplot(223)
+# plt.imshow(sample4[:,:,12])
+# plt.subplot(224)
+# plt.imshow(sample4[:,:,18])
+# plt.show()
+
+
+
+
+
 
 # data = dict(mode=mode, cheese=cheese)
 # print([key for key in data.keys()][0])

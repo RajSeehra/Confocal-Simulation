@@ -103,18 +103,35 @@ def pixel_cutter(array, x_position, y_position, window_size_x=10, window_size_y=
     ycoordmin = y_position - int(y // 2)
     ycoordmax = y_position + int((y / 2)+0.5)
 
+    # Setup empty pad values. This is to account for edges and corners as we wish to return an array of appropriate size
+    l_pad = 0
+    r_pad = 0
+    t_pad = 0
+    b_pad = 0
+
+
     # check no negative numbers
     if xcoordmin < 0:
+        l_pad = -xcoordmin
         xcoordmin = 0
-    if xcoordmax > imgArray.shape[0]:
-        xcoordmax = imgArray.shape[0]
+    if xcoordmax > imgArray.shape[1]:
+        r_pad = xcoordmax - imgArray.shape[1]
+        xcoordmax = imgArray.shape[1]
     if ycoordmin < 0:
+        t_pad = -ycoordmin
         ycoordmin = 0
-    if ycoordmax > imgArray.shape[1]:
-        ycoordmax = imgArray.shape[1]
+    if ycoordmax > imgArray.shape[0]:
+        b_pad = ycoordmax - imgArray.shape[0]
+        ycoordmax = imgArray.shape[0]
+
+    print(l_pad,r_pad,t_pad,b_pad)
     # Plotting the area.
-    print(imgArray[int(ycoordmin):int(ycoordmax), int(xcoordmin):int(xcoordmax)])
-    return imgArray[int(ycoordmin):int(ycoordmax), int(xcoordmin):int(xcoordmax)]
+    array = imgArray[int(ycoordmin):int(ycoordmax), int(xcoordmin):int(xcoordmax)]
+
+    if l_pad > 0 or t_pad > 0 or r_pad > 0 or b_pad > 0:
+        array = np.pad(array, ((t_pad, b_pad), (l_pad, r_pad)))
+
+    return array
 
 
 # Example
