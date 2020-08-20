@@ -203,30 +203,27 @@ if __name__ == '__main__':
     xy = 256
     z = 128
 
-    laserPSF = radial_PSF(xy, 0.02,0.1, z, 0.540)
+    laserPSF = radial_PSF(xy, 0.02,0.02, z, 0.540)
     laserPSF = np.moveaxis(laserPSF, 0, -1)  # The 1st axis was the z-values. Now in order y,x,z.
 
     laserPSF = (laserPSF / laserPSF.sum()) * (10000 * 1)
 
-    emission_PSF = radial_PSF(xy, 0.02,0.1, z, 0.480)
+    emission_PSF = radial_PSF(xy, 0.02,0.02, z, 0.480)
     emission_PSF = np.moveaxis(emission_PSF, 0, -1)  # The 1st axis was the z-values. Now in order y,x,z.
     emission_PSF = (emission_PSF / emission_PSF.sum())
 
     sample = np.zeros((xy, xy, z))
 
-    sample = conf.emptysphere3D(sample, 20,
+    sample = conf.emptysphere3D(sample, int(sample.shape[0] * 0.45),
                                 (sample.shape[1] // 2, sample.shape[0] // 2, sample.shape[2] // 2))
-    # sample = conf.emptysphere3D(sample, int(sample.shape[0] * 0.2),
-    #                             (sample.shape[1] // 2, sample.shape[0] // 2, sample.shape[2] // 2))
-    # sample2 = conf.emptysphere3D(sample, int(sample.shape[0] * 0.25),
-    #                              (sample.shape[1] // 2.5, sample.shape[0] // 2.5, sample.shape[2] // 2.5))
-    # sample3 = conf.emptysphere3D(sample, int(sample.shape[0] * 0.05),
-    #                              (sample.shape[1] // 1.4, sample.shape[0] // 1.4, sample.shape[2] // 1.7))
-    # sample4 = conf.emptysphere3D(sample, int(sample.shape[0] * 0.05),
-    #                              (sample.shape[1] // 2.5, sample.shape[0] // 1.4, sample.shape[2] // 1.4))
+    sample2 = conf.emptysphere3D(sample, int(sample.shape[0] * 0.25),
+                                 (sample.shape[1] // 2.5, sample.shape[0] // 2.5, sample.shape[2] // 2.5))
+    sample3 = conf.emptysphere3D(sample, int(sample.shape[0] * 0.05),
+                                 (sample.shape[1] // 1.4, sample.shape[0] // 1.4, sample.shape[2] // 1.7))
+    sample4 = conf.emptysphere3D(sample, int(sample.shape[0] * 0.05),
+                                 (sample.shape[1] // 2.5, sample.shape[0] // 1.4, sample.shape[2] // 1.4))
 
-    point = sample
-            # + sample2 + sample3 + sample4
+    point = sample + sample2 + sample3 + sample4
 
     # EDIT
 
