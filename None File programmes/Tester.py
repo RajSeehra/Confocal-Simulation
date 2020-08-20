@@ -12,6 +12,7 @@ from scipy.stats import binned_statistic_2d
 from skimage.transform import resize
 import time
 import multiprocessing as mp
+import microscPSF as msPSF
 
 
 # psf = sam.radial_PSF(100, 0.02, 100)
@@ -134,7 +135,7 @@ def stage_scanning(laserPSF, point, emission_PSF):
 
             # Convolute the produced array with the PSF to simulate the second lens.
             for i in range(0, point.shape[2]):
-                scan[:,:,i] = signal.fftconvolve(emission_PSF[:,:,i], laser_illum[:,:,i], mode="same")
+                scan[:,:,i] = np.rot90(signal.fftconvolve(emission_PSF[:,:,i], laser_illum[:,:,i], mode="same"),2)
                 # scan[:,:,i] = np.rot90(sam.kernel_filter_2D(laserPSF[:, :, i], laser_illum[:, :, i]), 2)        # When running a larger image over a smaller one it rotates the resulting info.
             print("x:", x, " and y:", y)
             # Flatten and sum z stack.
@@ -147,51 +148,85 @@ def stage_scanning(laserPSF, point, emission_PSF):
 
     return sums
 
+def radial_PSF(xy_size, xy_pixel_size=5, z_pixel_size = 10, stack_size=40, wavelength = 0.600):
+    """ A function that produces a PSF for a given wavelength in an array size given to it.
+
+    Parameters
+    ----------
+    xy_size : int
+        The number of pixels in the array in xy. e.g. 100x100 = 100.
+    pixel_size: float
+
+    stack_size:
+    wavelength:
+
+    Returns
+    ---------
+
+
+    """
+
+    # Radial PSF
+    mp = msPSF.m_params  # Microscope Parameters as defined in microscPSF. Dictionary format.
+
+    xy_pixel_size = xy_pixel_size  # In microns... (step size in the x-y plane)
+    xy_size = xy_size  # In pixels.
+
+    z_depth = (stack_size * z_pixel_size)/2
+
+    pv = np.arange(-z_depth, z_depth, z_pixel_size)  # Creates a 1D array stepping up by denoted pixel size,
+    # Essentially stepping in Z.
+
+    psf_xy1 = msPSF.gLXYZFocalScan(mp, xy_pixel_size, xy_size, pv, wvl=wavelength)  # Matrix ordered (Z,Y,X)
+
+    psf_total = psf_xy1
+
+    return psf_total
 
 
 
 def convolve(emission, laser):
-    scany = signal.fftconvolve(emission,laser, mode='same')
+    scany = np.rot90(signal.fftconvolve(emission,laser, mode='same'),2)
     return scany
 
 
 def doit():
     items = [(emission_PSF[:,:,i],laser_illum[:,:,i]) for i in range(emission_PSF.shape[2])]
-    start = time.time()
     pool = mp.Pool(mp.cpu_count())
     results = pool.starmap(convolve, items)
     pool.close()
-    end = time.time()
-    print(end - start)
 
     return results
 
 
 if __name__ == '__main__':
-    xy = 930
-    z = 20
+    xy = 256
+    z = 128
 
-    laserPSF = conf.radial_PSF(xy, 0.02, z, 0.540)
+    laserPSF = radial_PSF(xy, 0.02,0.1, z, 0.540)
     laserPSF = np.moveaxis(laserPSF, 0, -1)  # The 1st axis was the z-values. Now in order y,x,z.
 
     laserPSF = (laserPSF / laserPSF.sum()) * (10000 * 1)
 
-    emission_PSF = conf.radial_PSF(xy, 0.02, z, 0.480)
+    emission_PSF = radial_PSF(xy, 0.02,0.1, z, 0.480)
     emission_PSF = np.moveaxis(emission_PSF, 0, -1)  # The 1st axis was the z-values. Now in order y,x,z.
     emission_PSF = (emission_PSF / emission_PSF.sum())
 
     sample = np.zeros((xy, xy, z))
 
-    sample = conf.emptysphere3D(sample, int(sample.shape[0] * 0.45),
+    sample = conf.emptysphere3D(sample, 20,
                                 (sample.shape[1] // 2, sample.shape[0] // 2, sample.shape[2] // 2))
-    sample2 = conf.emptysphere3D(sample, int(sample.shape[0] * 0.25),
-                                 (sample.shape[1] // 2.5, sample.shape[0] // 2.5, sample.shape[2] // 2.5))
-    sample3 = conf.emptysphere3D(sample, int(sample.shape[0] * 0.05),
-                                 (sample.shape[1] // 1.4, sample.shape[0] // 1.4, sample.shape[2] // 1.7))
-    sample4 = conf.emptysphere3D(sample, int(sample.shape[0] * 0.05),
-                                 (sample.shape[1] // 2.5, sample.shape[0] // 1.4, sample.shape[2] // 1.4))
+    # sample = conf.emptysphere3D(sample, int(sample.shape[0] * 0.2),
+    #                             (sample.shape[1] // 2, sample.shape[0] // 2, sample.shape[2] // 2))
+    # sample2 = conf.emptysphere3D(sample, int(sample.shape[0] * 0.25),
+    #                              (sample.shape[1] // 2.5, sample.shape[0] // 2.5, sample.shape[2] // 2.5))
+    # sample3 = conf.emptysphere3D(sample, int(sample.shape[0] * 0.05),
+    #                              (sample.shape[1] // 1.4, sample.shape[0] // 1.4, sample.shape[2] // 1.7))
+    # sample4 = conf.emptysphere3D(sample, int(sample.shape[0] * 0.05),
+    #                              (sample.shape[1] // 2.5, sample.shape[0] // 1.4, sample.shape[2] // 1.4))
 
-    point = sample + sample2 + sample3 + sample4
+    point = sample
+            # + sample2 + sample3 + sample4
 
     # EDIT
 
@@ -200,33 +235,36 @@ if __name__ == '__main__':
     # Counter to track our z position/frame.
     counter = 0
 
-    x = 25
-    y = 25
+    x = point.shape[1]//2
+    y = point.shape[0]//2
 
     laser_illum = conf.array_multiply(laserPSF, point, x, y)
 
     # Add Shot Noise to the laser Illumination.
-    s_noise = conf.shot_noise(np.sqrt(laser_illum), laser_illum)
+    # s_noise = conf.shot_noise(np.sqrt(laser_illum), laser_illum)
     # print("Shot noise generated.")
-    laser_illum = laser_illum + s_noise
+    # laser_illum = laser_illum + s_noise
     print("Shot noise added.")
 
     # Old
     start = time.time()
     for i in range(0, point.shape[2]):
-        scan[:, :, i] = signal.fftconvolve(emission_PSF[:, :, i], laser_illum[:, :, i], mode="same")
+        scan[:, :, i] = np.rot90(signal.fftconvolve(emission_PSF[:, :, i], laser_illum[:, :, i], mode="same"),2)
     end = time.time()
-    print(end-start)
+    print("For Loop:",end-start)
     results = scan
     z_sum = np.sum(results, 2)
 
     # New
+    start = time.time()
     results2 = doit()
+    end = time.time()
+    print("Multiprocessing:",end - start)
     z_sum_2 = np.sum(results2, 0)
 
 
     items = [(emission_PSF[:,:,i],laser_illum[:,:,i]) for i in range(emission_PSF.shape[2])]
-    print(np.sum(emission_PSF[:,:,0]), np.sum(laser_illum[:,:,0]))
+    # print(np.sum(emission_PSF[:,:,0]), np.sum(laser_illum[:,:,0]))
     a,b = items[0]
     c = emission_PSF[:,:,0] - a
     d = laser_illum[:,:,0] - b
