@@ -124,7 +124,7 @@ def pixel_cutter(array, x_position, y_position, window_size_x=10, window_size_y=
         b_pad = ycoordmax - imgArray.shape[0]
         ycoordmax = imgArray.shape[0]
 
-    print(l_pad,r_pad,t_pad,b_pad)
+    # print(l_pad,r_pad,t_pad,b_pad)
     # Plotting the area.
     array = imgArray[int(ycoordmin):int(ycoordmax), int(xcoordmin):int(xcoordmax)]
 

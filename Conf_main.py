@@ -35,8 +35,12 @@ QE = 0.7                # Quantum Efficiency
 gain = 2                # Camera gain. Usually 2 per incidence photon
 count = 100             # Camera artificial count increase.
 # NOISE
+include_read_noise = "Y" # Y/N. Include read noise
 read_mean = 2           # Read noise mean level
 read_std = 2             # Read noise standard deviation level
+include_shot_noise = "Y" # Y/N. Include shot noise
+fix_seed = "Y"        # Y/N to fix the Shot noise seed.
+include_fixed_pattern_noise = "Y" # Y/N. Include fixed pattern noise
 fixed_pattern_deviation = 0.001  # Fixed pattern standard deviation. usually affects 0.1% of pixels.
 # MODE #
 mode = "Confocal"       # Mode refers to whether we are doing "Brightfield NEED TO ADD", Confocal or ISM imaging.
@@ -67,8 +71,13 @@ QE = dc.simple_datacheck_lesser_greater(QE, "QE", 0, 1)
 gain = dc.simple_datacheck_lesser_greater(gain, "gain", 1, 500)
 count = dc.simple_datacheck_lesser_greater(count, "count", 0, 1000)
 # NOISE
+yes_no = ["Y", "N"]
+include_read_noise = dc.simple_datacheck_string(include_read_noise, "include_read_noise", yes_no)
 read_mean = dc.simple_datacheck_lesser_greater(read_mean, "read_mean", 0, 200)
 read_std = dc.simple_datacheck_lesser_greater(read_std, "read_std", 0, 200)
+include_shot_noise = dc.simple_datacheck_string(include_shot_noise, "include_shot_noise", yes_no)
+fix_seed = dc.simple_datacheck_string(fix_seed, "fix_seed", yes_no)
+include_fixed_pattern_noise = dc.simple_datacheck_string(include_fixed_pattern_noise, "include_fixed_pattern_noise", yes_no)
 fixed_pattern_deviation = dc.simple_datacheck_lesser_greater(fixed_pattern_deviation, "fixed_pattern_deviation", 0, 1)
 # MODE #
 mode_options = ["Confocal", "ISM"]
@@ -123,7 +132,7 @@ emission_PSF = np.moveaxis(emission_PSF, 0, -1)     # The 1st axis was the z-val
 emission_PSF = (emission_PSF / emission_PSF.sum())  # Equating to 1. (to do: 1 count =  1 microwatt, hence conversion to photons.)
 # Takes the psf and sample arrays as inputs and scans across them.
 # Returns an array at the same xy size with a z depth of x*y.
-sums = confmain.stage_scanning(laserPSF, point, emission_PSF)
+sums = confmain.stage_scanning(laserPSF, point, emission_PSF, include_shot_noise, fix_seed)
 
 
 ### CAMERA SETUP ###
@@ -174,13 +183,19 @@ print("QE step")
 
 ### NOISE ###
 print("Creating noise.")
-read_noise = confmain.read_noise(QE_image, read_mean, read_std)
-print("Read noise generated.")
+if include_read_noise == "Y":
+    read_noise = confmain.read_noise(QE_image, read_mean, read_std)
+    print("Read noise generated.")
+else:
+    read_noise = 0
 # Fix the seed for fixed pattern noise
-np.random.seed(100)
-fixed_pattern_noise = np.random.normal(1, fixed_pattern_deviation, (QE_image.shape[0],
-                                                                    QE_image.shape[1],
-                                                                    QE_image.shape[2]))
+if include_fixed_pattern_noise == "Y":
+    np.random.seed(100)
+    fixed_pattern_noise = np.random.normal(1, fixed_pattern_deviation, (QE_image.shape[0],
+                                                                        QE_image.shape[1],
+                                                                        QE_image.shape[2]))
+else:
+    fixed_pattern_noise = 1
 print("Fixed Pattern noise generated.")
 # Sum the noises and the image
 noisy_image = (QE_image + read_noise) * fixed_pattern_noise

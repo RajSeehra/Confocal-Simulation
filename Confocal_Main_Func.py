@@ -51,6 +51,25 @@ def emptysphere3D(array, radius, sphere_centre):
 
 
 def radial_PSF(xy_size, pixel_size=5, stack_size=40, wavelength = 0.600):
+    """ A function that produces a PSF for a given wavelength in an array size given to it.
+
+    Parameters
+    ----------
+    xy_size : int
+        The number of pixels in the array in xy. e.g. 100x100 = 100.
+    pixel_size : float
+        A singular value for the length of a pixel in x,y and z to make a cube voxel.
+    stack_size : int
+        The z-size of the array.
+    wavelength : float
+        The wavelength in microns
+
+    Returns
+    ---------
+    psf_total :
+        The PSF 3D array for the requested wavelength.
+    """
+
     # Radial PSF
     mp = msPSF.m_params  # Microscope Parameters as defined in microscPSF. Dictionary format.
 
@@ -71,6 +90,24 @@ def radial_PSF(xy_size, pixel_size=5, stack_size=40, wavelength = 0.600):
 
 ##### MAIN BODY FUNCTIONS #####
 def array_multiply(base_array, offset_array, x_pos, y_pos):
+    """ Multiplies two arrays element-wise that are not centred on each other and returns an array centred on the base array.
+
+    Parameters
+    ----------
+    base_array : arraylike
+        Arraylike input to be the centred array.
+    offset_array : arraylike
+        Arraylike input to be offset at x and y to the centre of the base array.
+    x_pos : int
+        The x value of the offset_array which will be at the centre of the base array.
+    y_pos : int
+        The y value of the offset_array which will be at the centre of the base array.
+
+    Returns
+    ----------
+    multiplied_array: arraylike
+        The multiplied array of the same size as the base array.
+    """
     # Using a cropping system this function multiplies two arrays at a certain position in space.
     offset_array_centre_dist_x = (offset_array.shape[1]) // 2
     offset_array_centre_dist_y = (offset_array.shape[0]) // 2
@@ -125,7 +162,28 @@ def array_multiply(base_array, offset_array, x_pos, y_pos):
     return multiplied_array
 
 
-def stage_scanning(laserPSF, point, emission_PSF):
+def stage_scanning(laserPSF, point, emission_PSF, include_shot_noise = "Y", fix_seed = "N"):
+    """ Uses the input sample and PSFs to simulate the process of a stage scanning microscope for each xy position up to
+    the procedding lens. Shot Noise included.
+
+    Parameters
+    ----------
+    laserPSF : ndarray
+        The laser PSF in 3D space. Should be the same size as point.
+    point : ndarray
+        The ground truth sample.
+    emission_PSF : ndarray
+        The emission PSF in 3D space. Should be the same size as point.
+    include_shot_noise : str
+        Yes or No. To include Shot noise or not.
+    fix_seed : str
+        Yes or No. To fix the Shot noise seed.
+    Returns
+    ----------
+    sums : ndarray
+        Array of size: xy= point xy, and z = point x * point y size. This contains the scanned and z flattened image for
+        each scanning point in the ground truth array.
+    """
     # Produce an array that will receive the data we collect.
     laser_illum = np.zeros((laserPSF.shape[1], laserPSF.shape[0], laserPSF.shape[2]))  # Laser x sample
     scan = np.zeros((laserPSF.shape[1], laserPSF.shape[0], laserPSF.shape[2]))         # Laser illum conv w/ psf
@@ -141,17 +199,17 @@ def stage_scanning(laserPSF, point, emission_PSF):
             laser_illum = array_multiply(laserPSF, point, x, y)
 
             # Add Shot Noise to the laser Illumination.
-            mean_signal = np.mean(laser_illum)
-            s_noise = shot_noise(np.sqrt(laser_illum), laser_illum)
-            print("Shot noise generated.")
-            laser_illum = laser_illum + s_noise
-            print("Shot noise added.")
+            if include_shot_noise == "Y":
+                s_noise = shot_noise(np.sqrt(laser_illum), laser_illum, fix_seed)
+                print("Shot noise generated.")
+                laser_illum = laser_illum + s_noise
+                print("Shot noise added.")
 
             # Convolute the produced array with the PSF to simulate the second lens.
             for i in range(0, point.shape[2]):
-                scan[:,:,i] = signal.fftconvolve(emission_PSF[:,:,i], laser_illum[:,:,i], mode="same")
+                scan[:,:,i] = np.rot90(signal.fftconvolve(emission_PSF[:,:,i], laser_illum[:,:,i], mode="same"),2)
                 # scan[:,:,i] = np.rot90(sam.kernel_filter_2D(laserPSF[:, :, i], laser_illum[:, :, i]), 2)        # When running a larger image over a smaller one it rotates the resulting info.
-            print("x:", x, " and y:", y)
+            # print("x:", x, " and y:", y)
             # Flatten and sum z stack.
             z_sum = np.sum(scan, 2)
 
@@ -173,6 +231,24 @@ def stage_scanning(laserPSF, point, emission_PSF):
 #                   distribution is equal for all pixels.
 #                   The array is of shape(sums.shape[x]*array_upscale, sums.shape[y]*array_upscale, z)
 def upscale(scanned_data, mag_ratio):
+    """ Takes the scanned data set (sums) and the magnification ratio and upscales the value to produce a new binning
+     value and the upscaled array.
+
+    Parameters
+    ----------
+    scanned_data : ndarray
+        The sums dataset from the function stage scanning which contains the flattened z stack for each xy position on
+        the ground truth.
+    mag_ratio : float
+        The binning value we are going to use to calculate our upscaling.
+
+    Returns
+    ----------
+    upscaling_array : ndarray
+        The upscaled version of the array in accordance with the input data.
+    upscale_ground_to_camera_num : int
+        The new mag ratio for binning.
+    """
     # Turn the magfrac into a rational fraction
     mag_ratio = Fraction(mag_ratio).limit_denominator()
     # The upscale value for the array.
@@ -197,14 +273,18 @@ def binning(sums, bin_array, mag_ratio):
 
     Parameters
     ----------
-    sums:
+    sums : arraylike
         The summed value array to be binned.
-    bin_array:
+    bin_array : arraylike
         An empty bin to which the function adds the data to be binned to.
-    mag_ratio:
+    mag_ratio : int
         the magnification ratio, usually a division of the ground truth pixel size and the camera pixel size.
         Further divided by the magnification.
 
+    Returns
+    ----------
+    bin_array : ndarray
+        the binned array of reduced xy size but equivalent z.
     """
     for z in range(0, bin_array.shape[2]):
         for y in range(0, bin_array.shape[0]):
@@ -227,8 +307,9 @@ def read_noise(data, read_mean=2, read_std=2):
     return read_noise
 
 
-def shot_noise(sqrt_mean_signal, data):
-    np.random.seed(100)
+def shot_noise(sqrt_mean_signal, data, fix_seed = "Y"):
+    if fix_seed == "Y":
+        np.random.seed(100)
     shot_noise = np.random.poisson(sqrt_mean_signal, (np.shape(data)))
     return shot_noise
 
