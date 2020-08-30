@@ -1,9 +1,6 @@
 import numpy as np
 import Confocal_Samurai as sam
 import matplotlib.pyplot as plt
-import microscPSF as msPSF
-from scipy import signal
-
 
 # This program takes a 2D sample and simulates a stage scanning microscope. Hence the sample is 'moved'
 # relative to the detector.

@@ -4,9 +4,6 @@ import os
 import microscPSF as msPSF
 from scipy import signal
 from fractions import Fraction
-import pandas as pd
-from skimage.morphology import closing, square
-from skimage.measure import label, regionprops, regionprops_table
 
 
 def Gaussian_Map(image_size, offset, centre_x, centre_y, width, amplitude):

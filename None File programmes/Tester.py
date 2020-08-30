@@ -1,16 +1,7 @@
 import numpy as np
-from fractions import Fraction
 import matplotlib.pyplot as plt
-import Confocal_Samurai as sam
 import Confocal_Main_Func as conf
-import Confocal_Processing as proc
 from scipy import signal
-from PIL import Image
-import microscPSF as msc
-from multiprocessing import pool
-from scipy.stats import binned_statistic_2d
-from skimage.transform import resize
-import time
 import multiprocessing as mp
 import microscPSF as msPSF
 
@@ -198,84 +189,147 @@ def doit():
 
     return results
 
+xy_size = 100
+z = 100
+# Made a point in centre of 2D array
+# point = np.zeros((xy_size, xy_size, z))
+# point[25, 25, 1] = intensity
+# point[75, 75, -1] = intensity
+# point[xy_size//2, xy_size//2, z // 2] = 1
+# point[laserPSF.shape[0]//2, laserPSF.shape[1]//2+20, laserPSF.shape[2] // 2] = intensity
 
-if __name__ == '__main__':
-    xy = 256
-    z = 128
-
-    laserPSF = radial_PSF(xy, 0.02,0.02, z, 0.540)
-    laserPSF = np.moveaxis(laserPSF, 0, -1)  # The 1st axis was the z-values. Now in order y,x,z.
-
-    laserPSF = (laserPSF / laserPSF.sum()) * (10000 * 1)
-
-    emission_PSF = radial_PSF(xy, 0.02,0.02, z, 0.480)
-    emission_PSF = np.moveaxis(emission_PSF, 0, -1)  # The 1st axis was the z-values. Now in order y,x,z.
-    emission_PSF = (emission_PSF / emission_PSF.sum())
-
-    sample = np.zeros((xy, xy, z))
-
-    sample = conf.emptysphere3D(sample, int(sample.shape[0] * 0.45),
-                                (sample.shape[1] // 2, sample.shape[0] // 2, sample.shape[2] // 2))
-    sample2 = conf.emptysphere3D(sample, int(sample.shape[0] * 0.25),
-                                 (sample.shape[1] // 2.5, sample.shape[0] // 2.5, sample.shape[2] // 2.5))
-    sample3 = conf.emptysphere3D(sample, int(sample.shape[0] * 0.05),
-                                 (sample.shape[1] // 1.4, sample.shape[0] // 1.4, sample.shape[2] // 1.7))
-    sample4 = conf.emptysphere3D(sample, int(sample.shape[0] * 0.05),
-                                 (sample.shape[1] // 2.5, sample.shape[0] // 1.4, sample.shape[2] // 1.4))
-
-    point = sample + sample2 + sample3 + sample4
-
-    # EDIT
-
-    scan = np.zeros((laserPSF.shape[1], laserPSF.shape[0], laserPSF.shape[2]))  # Laser illum conv w/ psf
-    sums = np.zeros((point.shape[1], point.shape[0], int(point.shape[1] * point.shape[0])))  # z sum of scan.
-    # Counter to track our z position/frame.
-    counter = 0
-
-    x = point.shape[1]//2
-    y = point.shape[0]//2
-
-    laser_illum = conf.array_multiply(laserPSF, point, x, y)
-
-    # Add Shot Noise to the laser Illumination.
-    # s_noise = conf.shot_noise(np.sqrt(laser_illum), laser_illum)
-    # print("Shot noise generated.")
-    # laser_illum = laser_illum + s_noise
-    print("Shot noise added.")
-
-    # Old
-    start = time.time()
-    for i in range(0, point.shape[2]):
-        scan[:, :, i] = np.rot90(signal.fftconvolve(emission_PSF[:, :, i], laser_illum[:, :, i], mode="same"),2)
-    end = time.time()
-    print("For Loop:",end-start)
-    results = scan
-    z_sum = np.sum(results, 2)
-
-    # New
-    start = time.time()
-    results2 = doit()
-    end = time.time()
-    print("Multiprocessing:",end - start)
-    z_sum_2 = np.sum(results2, 0)
+## Spherical ground truth  ##
+# radius = 40
+# sphere_centre = (point.shape[0]//2, point.shape[1]//2, point.shape[2] // 2)
+# point = conf.emptysphere3D(point, radius, sphere_centre)
+## More Complex Spherical Ground Truth ##
+# sample = point
+# sample = conf.emptysphere3D(sample, int(sample.shape[0]*0.4), (sample.shape[1]//2, sample.shape[0]//2, sample.shape[2]//2))
+# sample2 = conf.emptysphere3D(sample, int(sample.shape[0]*0.25), (sample.shape[1]//2.5, sample.shape[0]//2.5, sample.shape[2]//2.5))
+# sample3 = conf.emptysphere3D(sample, int(sample.shape[0]*0.05), (sample.shape[1]//1.4, sample.shape[0]//1.4, sample.shape[2]//1.7))
+# sample4 = conf.emptysphere3D(sample, int(sample.shape[0]*0.05), (sample.shape[1]//2.5, sample.shape[0]//1.4, sample.shape[2]//1.4))
+# point = (sample+sample2+sample3+sample4)
 
 
-    items = [(emission_PSF[:,:,i],laser_illum[:,:,i]) for i in range(emission_PSF.shape[2])]
-    # print(np.sum(emission_PSF[:,:,0]), np.sum(laser_illum[:,:,0]))
-    a,b = items[0]
-    c = emission_PSF[:,:,0] - a
-    d = laser_illum[:,:,0] - b
-    c1 = np.sum(c)
-    d1 = np.sum(d)
 
-    # 0.033296035829118414 good
-    # 0.22621940709885408 bad
+# Point laser
+# laser = np.zeros((100,100))
+# laser[50,50] = 1
+#
+# Brightfield
+# laser = np.zeros((100,100))
+# laser[:,:] = 1
+#
+# # spinning disk
+# # laser = np.zeros((100,100))
+# # laserpos = np.zeros((100,100,400))
+# # for i in range(0,20):
+# #     for j in range(0,20):
+# #         for x in range(0,100,20):
+# #             for y in range(0,100,20):
+# #                 laser[y,x] = 1
+# #         laserpos[:,:,i+j] = laser
+# #         laser = np.zeros((100, 100))
+#
+xy = 200
+z = 200
+laserPSF = radial_PSF(xy, 0.02,0.02, z, 0.540)
+# laserPSF = np.moveaxis(laserPSF, 0, -1)  # The 1st axis was the z-values. Now in order y,x,z.
+#
+plt.imshow(laserPSF[:,:,50])
+# laserPSF = (laserPSF / laserPSF.sum())
+#
+# lasermix = np.zeros((100,100,100))
+#
+# for i in range(0,100):
+#     lasermix[:,:,i] = signal.fftconvolve(laser,laserPSF[:,:,i], "same")
+#
+# # print(np.sum(lasermix)- np.sum(laserPSF))
+# plt.imshow(lasermix[:,:,50])
 
-    plt.subplot(121)
-    plt.imshow(z_sum)
-    plt.subplot(122)
-    plt.imshow(z_sum_2)
-    plt.show()
+#
+# if __name__ == '__main__':
+#     xy = 100
+#     z = 100
+#
+#     laserPSF = radial_PSF(xy, 0.02,0.02, z, 0.480)
+#     laserPSF = np.moveaxis(laserPSF, 0, -1)  # The 1st axis was the z-values. Now in order y,x,z.
+#
+#     laserPSF = (laserPSF / laserPSF.sum()) * (10000 * 1)
+#
+#     emission_PSF = radial_PSF(xy, 0.02,0.02, z, 0.540)
+#     emission_PSF = np.moveaxis(emission_PSF, 0, -1)  # The 1st axis was the z-values. Now in order y,x,z.
+#     emission_PSF = (emission_PSF / emission_PSF.sum())
+#
+#     sample = np.zeros((xy, xy, z))
+#
+#     sample[laserPSF.shape[0]//2, laserPSF.shape[1]//2, laserPSF.shape[2] // 2] = 1
+#     point = sample
+#
+#     # sample = conf.emptysphere3D(sample, int(sample.shape[0] * 0.45),
+#     #                             (sample.shape[1] // 2, sample.shape[0] // 2, sample.shape[2] // 2))
+#     # sample2 = conf.emptysphere3D(sample, int(sample.shape[0] * 0.25),
+#     #                              (sample.shape[1] // 2.5, sample.shape[0] // 2.5, sample.shape[2] // 2.5))
+#     # sample3 = conf.emptysphere3D(sample, int(sample.shape[0] * 0.05),
+#     #                              (sample.shape[1] // 1.4, sample.shape[0] // 1.4, sample.shape[2] // 1.7))
+#     # sample4 = conf.emptysphere3D(sample, int(sample.shape[0] * 0.05),
+#     #                              (sample.shape[1] // 2.5, sample.shape[0] // 1.4, sample.shape[2] // 1.4))
+#     #
+#     # point = sample + sample2 + sample3 + sample4
+#
+#     # EDIT
+#
+#     scan = np.zeros((laserPSF.shape[1], laserPSF.shape[0], laserPSF.shape[2]))  # Laser illum conv w/ psf
+#     sums = np.zeros((point.shape[1], point.shape[0], int(point.shape[1] * point.shape[0])))  # z sum of scan.
+#     # Counter to track our z position/frame.
+#     counter = 0
+#
+#     x = point.shape[1]//2 +10
+#     y = point.shape[0]//2 +10
+#
+#     laser_illum = conf.array_multiply(point, laserPSF, x, y)
+#
+#     # Add Shot Noise to the laser Illumination.
+#     # s_noise = conf.shot_noise(np.sqrt(laser_illum), laser_illum)
+#     # print("Shot noise generated.")
+#     # laser_illum = laser_illum + s_noise
+#     print("Shot noise added.")
+#
+#     # Old
+#     start = time.time()
+#     for i in range(0, point.shape[2]):
+#         scan[:, :, i] = np.rot90(signal.fftconvolve(emission_PSF[:, :, i], laser_illum[:, :, i], mode="same"),2)
+#     end = time.time()
+#     print("For Loop:",end-start)
+#     results = scan
+#     z_sum = np.sum(results, 2)
+#
+#     # New
+#     start = time.time()
+#     results2 = doit()
+#     end = time.time()
+#     print("Multiprocessing:",end - start)
+#     z_sum_2 = np.sum(results2, 0)
+#
+#
+#     items = [(emission_PSF[:,:,i],laser_illum[:,:,i]) for i in range(emission_PSF.shape[2])]
+#     # print(np.sum(emission_PSF[:,:,0]), np.sum(laser_illum[:,:,0]))
+#     a,b = items[0]
+#     c = emission_PSF[:,:,0] - a
+#     d = laser_illum[:,:,0] - b
+#     c1 = np.sum(c)
+#     d1 = np.sum(d)
+#
+#     # 0.033296035829118414 good
+#     # 0.22621940709885408 bad
+#
+#     # plt.subplot(121)
+#     plt.imshow(z_sum)
+#     # plt.subplot(122)
+#     # plt.imshow(z_sum_2)
+#     plt.show()
+
+
 
 
 # data = np.concatenate((emission_PSF, laser_illum),0)

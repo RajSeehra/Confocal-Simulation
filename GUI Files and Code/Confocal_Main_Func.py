@@ -1,4 +1,3 @@
-from PIL import Image
 import numpy as np
 import Confocal_Processing as proc
 import microscPSF as msPSF
