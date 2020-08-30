@@ -95,9 +95,9 @@ def array_multiply(base_array, offset_array, x_pos, y_pos):
     Parameters
     ----------
     base_array : arraylike
-        Arraylike input to be the centred array.
+        Arraylike input to be the moving array.
     offset_array : arraylike
-        Arraylike input to be offset at x and y to the centre of the base array.
+        Arraylike input to be offset at x and y to the centre of the moving array.
     x_pos : int
         The x value of the offset_array which will be at the centre of the base array.
     y_pos : int
@@ -196,7 +196,7 @@ def stage_scanning(laserPSF, point, emission_PSF, include_shot_noise = "Y", fix_
         for y in range(0, point.shape[0]):
             # Multiplies the PSF multiplied laser with the sample. The centre of the sample is moved to position x,y
             # on the laser array, as this is a stage scanning microscope.
-            laser_illum = array_multiply(laserPSF, point, x, y)
+            laser_illum = array_multiply(point, laserPSF, x, y)
 
             # Add Shot Noise to the laser Illumination.
             if include_shot_noise == "Y":
@@ -207,7 +207,7 @@ def stage_scanning(laserPSF, point, emission_PSF, include_shot_noise = "Y", fix_
 
             # Convolute the produced array with the PSF to simulate the second lens.
             for i in range(0, point.shape[2]):
-                scan[:,:,i] = np.rot90(signal.fftconvolve(emission_PSF[:,:,i], laser_illum[:,:,i], mode="same"),2)
+                scan[:,:,i] = signal.fftconvolve(emission_PSF[:,:,i], laser_illum[:,:,i], mode="same")
                 # scan[:,:,i] = np.rot90(sam.kernel_filter_2D(laserPSF[:, :, i], laser_illum[:, :, i]), 2)        # When running a larger image over a smaller one it rotates the resulting info.
             # print("x:", x, " and y:", y)
             # Flatten and sum z stack.
@@ -315,6 +315,21 @@ def shot_noise(sqrt_mean_signal, data, fix_seed = "Y"):
 
 ### CONFOCAL ###
 def confocal(pinhole_sum, point):
+    """ Takes an arraylike containing the flattened image data, and sums it to a single value to be placed back at the
+    xy location the image was centred on.
+
+    Parameters
+    ----------
+    pinhole_sum : ndarray
+        Stack of images taken processed to the detector with the pinhole added to it.
+    point : ndarray
+        The ground truth. Only used for size data due to the size being equivalent to the scanning locations.
+
+    Returns
+    ----------
+    conf_array : ndarray
+        The final array of the image.
+    """
     # Set up the confocal array
     conf_array = np.zeros((point.shape[0], point.shape[1]))
 
@@ -331,7 +346,7 @@ def ISM(pinhole_sum, point, pinhole_radius, scale=16):
     # of the pinhole.
     y = proc.centre_collection(pinhole_sum)
 
-    Cut_out_pinhole = 2 * pinhole_radius
+    Cut_out_pinhole = int(2 * pinhole_radius)
     cut_section = np.zeros((pinhole_radius*2, pinhole_radius*2, pinhole_sum.shape[2]))
     for i in range(0, pinhole_sum.shape[2]):
         cut_section[:, :, i] = proc.pixel_cutter(pinhole_sum, y[1, i], y[0, i], Cut_out_pinhole, Cut_out_pinhole, i)

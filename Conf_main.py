@@ -5,6 +5,7 @@ import Data_Check as dc
 import matplotlib.pyplot as plt
 import microscPSF as msPSF
 from fractions import Fraction
+from scipy import signal
 
 # This program takes a 3D sample and simulates a stage scanning microscope. Hence the sample is 'moved'
 # relative to the detector.
@@ -17,7 +18,7 @@ from fractions import Fraction
 xy_size = 100           # xy size for both laser and sample.
 pixel_size = 0.02      # Ground truth pixel size in microns
 stack_size = 100         # Z depth for the PSF
-laser_power = 10000000       # Laser power per second in should be microwatts where 1 count = 1 microwatt. average in live cell is 15000 microwatt
+laser_power = 1000000000000       # Laser power per second in should be microwatts where 1 count = 1 microwatt. average in live cell is 15000 microwatt
 exposure_time = 1       # seconds of exposure
 # PSF
 excitation_wavelength = 0.480    # Wavelength in microns
@@ -26,11 +27,12 @@ NA = 1.4                # Numerical aperture
 ### Dont touch the below line ###
 msPSF.m_params["NA"] = NA   # alters the value of the microscope parameters in microscPSF. Has a default value of 1.4
 # PINHOLE #
-pinhole_radius = 3        # Radius of the pinhole in pixels.
+pinhole_radius = 100        # Radius of the pinhole in pixels.
 offset = 0                # Offsets the pinhole. Meant to help increase resolution but needs to be implemented in fourier reweighting..
 # CAMERA
 camera_pixel_size = 6   # Camera pixel size in microns. usual sizes = 6 microns or 11 microns
 magnification = 100     # Lens magnification
+msPSF.m_params["M"] = magnification   # alters the value of the microscope parameters in microscPSF. Has a default value of 100
 QE = 0.7                # Quantum Efficiency
 gain = 2                # Camera gain. Usually 2 per incidence photon
 count = 100             # Camera artificial count increase.
@@ -43,7 +45,7 @@ fix_seed = "Y"        # Y/N to fix the Shot noise seed.
 include_fixed_pattern_noise = "Y" # Y/N. Include fixed pattern noise
 fixed_pattern_deviation = 0.001  # Fixed pattern standard deviation. usually affects 0.1% of pixels.
 # MODE #
-mode = "Confocal"       # Mode refers to whether we are doing "Brightfield NEED TO ADD", Confocal or ISM imaging.
+mode = "Widefield"       # Mode refers to whether we are doing "Widefield NEED TO ADD", Confocal or ISM imaging.
 # SAVE
 Preview = "Y"
 SAVE = "N"              # Save parameter, input Y to save, other parameters will not save.
@@ -80,7 +82,7 @@ fix_seed = dc.simple_datacheck_string(fix_seed, "fix_seed", yes_no)
 include_fixed_pattern_noise = dc.simple_datacheck_string(include_fixed_pattern_noise, "include_fixed_pattern_noise", yes_no)
 fixed_pattern_deviation = dc.simple_datacheck_lesser_greater(fixed_pattern_deviation, "fixed_pattern_deviation", 0, 1)
 # MODE #
-mode_options = ["Confocal", "ISM"]
+mode_options = ["Widefield", "Confocal", "ISM"]
 mode = dc.simple_datacheck_string(mode, "mode", mode_options)
 # SAVE #
 yes_no = ["Y", "N"]
@@ -107,22 +109,28 @@ laserPSF = (laserPSF / laserPSF.sum()) * (laser_power * exposure_time)  # Equati
 
 
 ### SAMPLE PARAMETERS ###
+if mode == "Widefield":
+    intensity = 100000
+else:
+    intensity = 1
 # Made a point in centre of 2D array
 point = np.zeros((xy_size, xy_size, laserPSF.shape[2]))
-# point[25, 25, 1] = 1
-# point[75, 75, -1] = 1
-# point[laserPSF.shape[0]//2, laserPSF.shape[1]//2, laserPSF.shape[2] // 2] = 1
+# point[25, 25, 1] = intensity
+# point[75, 75, -1] = intensity
+point[laserPSF.shape[0]//2, laserPSF.shape[1]//2, laserPSF.shape[2] // 2] = intensity
+# point[laserPSF.shape[0]//2, laserPSF.shape[1]//2+20, laserPSF.shape[2] // 2] = intensity
+
 ## Spherical ground truth  ##
 # radius = 40
 # sphere_centre = (point.shape[0]//2, point.shape[1]//2, point.shape[2] // 2)
-# point = confmain.emptysphere3D(point, radius, sphere_centre)
+# point = confmain.emptysphere3D(point, radius, sphere_centre) * intensity
 ## More Complex Spherical Ground Truth ##
-sample = point
-sample = confmain.emptysphere3D(sample, int(sample.shape[0]*0.4), (sample.shape[1]//2, sample.shape[0]//2, sample.shape[2]//2))
-sample2 = confmain.emptysphere3D(sample, int(sample.shape[0]*0.25), (sample.shape[1]//2.5, sample.shape[0]//2.5, sample.shape[2]//2.5))
-sample3 = confmain.emptysphere3D(sample, int(sample.shape[0]*0.05), (sample.shape[1]//1.4, sample.shape[0]//1.4, sample.shape[2]//1.7))
-sample4 = confmain.emptysphere3D(sample, int(sample.shape[0]*0.05), (sample.shape[1]//2.5, sample.shape[0]//1.4, sample.shape[2]//1.4))
-point = sample+sample2+sample3+sample4
+# sample = point
+# sample = confmain.emptysphere3D(sample, int(sample.shape[0]*0.4), (sample.shape[1]//2, sample.shape[0]//2, sample.shape[2]//2))
+# sample2 = confmain.emptysphere3D(sample, int(sample.shape[0]*0.25), (sample.shape[1]//2.5, sample.shape[0]//2.5, sample.shape[2]//2.5))
+# sample3 = confmain.emptysphere3D(sample, int(sample.shape[0]*0.05), (sample.shape[1]//1.4, sample.shape[0]//1.4, sample.shape[2]//1.7))
+# sample4 = confmain.emptysphere3D(sample, int(sample.shape[0]*0.05), (sample.shape[1]//2.5, sample.shape[0]//1.4, sample.shape[2]//1.4))
+# point = (sample+sample2+sample3+sample4) * intensity
 
 
 ### STAGE SCANNING SO SAMPLE IS RUN ACROSS THE PSF (OR 'LENS') ###
@@ -132,7 +140,22 @@ emission_PSF = np.moveaxis(emission_PSF, 0, -1)     # The 1st axis was the z-val
 emission_PSF = (emission_PSF / emission_PSF.sum())  # Equating to 1. (to do: 1 count =  1 microwatt, hence conversion to photons.)
 # Takes the psf and sample arrays as inputs and scans across them.
 # Returns an array at the same xy size with a z depth of x*y.
-sums = confmain.stage_scanning(laserPSF, point, emission_PSF, include_shot_noise, fix_seed)
+if mode == "Widefield":
+    sums = signal.fftconvolve(point, emission_PSF, "same")
+    for x in range(0, sums.shape[1]):
+        for y in range(0,sums.shape[0]):
+            for z in range(0, sums.shape[2]):
+                if sums[y,x,z] < 0:
+                    sums[y,x,z] = 0
+    if include_shot_noise == "Y":
+        shot_noise = confmain.shot_noise(np.sqrt(sums), sums, fix_seed)
+        print("Shot noise added")
+    else:
+        shot_noise = 0
+        print("Shot noise not added")
+    sums = sums + shot_noise
+else:
+    sums = confmain.stage_scanning(laserPSF, point, emission_PSF, include_shot_noise, fix_seed)
 
 
 ### CAMERA SETUP ###
@@ -197,6 +220,8 @@ if include_fixed_pattern_noise == "Y":
 else:
     fixed_pattern_noise = 1
 print("Fixed Pattern noise generated.")
+
+
 # Sum the noises and the image
 noisy_image = (QE_image + read_noise) * fixed_pattern_noise
 print("Combining noises with image. Complete!")
@@ -220,22 +245,28 @@ camera_view = camera_plusCount.astype(np.uint16)
 ### PINHOLE ###
 # Multiply by pinhole, which is centered and offset.
 # Produces a simple circle mask centred at x,y.
-print("Time to add our digital pinhole.")
-circle_pinhole = proc.circle_mask(camera_view, pinhole_radius,
-                                  (camera_view.shape[1] // 2 + offset, camera_view.shape[0] // 2 + offset))
-# Produce an empty array to place the results into.
-pinhole_sum = np.zeros((camera_view.shape[0], camera_view.shape[1], camera_view.shape[2]))
+if mode == "Widefield":
+    pinhole_sum = noisy_image
+else:
+    print("Time to add our digital pinhole.")
+    circle_pinhole = proc.circle_mask(camera_view, pinhole_radius,
+                                      (camera_view.shape[1] // 2 + offset, camera_view.shape[0] // 2 + offset))
+    # Produce an empty array to place the results into.
+    pinhole_sum = np.zeros((camera_view.shape[0], camera_view.shape[1], camera_view.shape[2]))
 
-# Multiplies the binned image with the circle pinhole at each z position.
-# This digitally adds our pinhole to the binned image at the size we desire.
-for i in range(0, camera_view.shape[2]):
-    pinhole_sum[:, :, i] = camera_view[:, :, i] * circle_pinhole
-print("Pinholes added.")
+    # Multiplies the binned image with the circle pinhole at each z position.
+    # This digitally adds our pinhole to the binned image at the size we desire.
+    for i in range(0, camera_view.shape[2]):
+        pinhole_sum[:, :, i] = camera_view[:, :, i] * circle_pinhole
+    print("Pinholes added.")
 
 
 ### CONFOCAL SUMMING ###
 # Reconstruct the image based on the collected arrays.
-if mode == "Confocal":
+if mode == "Widefield":
+    conf_array = np.sum(pinhole_sum,2)
+    print("Widefield Image, Check")
+elif mode == "Confocal":
     print("So it's CONFOCAL imaging time.")
     conf_array = confmain.confocal(pinhole_sum, point)
     print("CONFOCAL, DEPLOY IMAGE!!")
