@@ -286,17 +286,15 @@ def upscale(scanned_data, mag_ratio):
 
     upscaling_array = np.zeros((scanned_data.shape[0] * array_upscale, scanned_data.shape[1] * array_upscale, scanned_data.shape[2]))
     for z in range(0, scanned_data.shape[2]):
+        PySimpleGUI.OneLineProgressMeter("Upscaling Progress (Won't Close)", counter, scanned_data.shape[2], key="upscale")
         for y in range(0, scanned_data.shape[0]):
             for x in range(0, scanned_data.shape[1]):
-                PySimpleGUI.OneLineProgressMeter("Upscaling Progress (Won't Close)", counter,
-                                                 scanned_data.shape[0] * scanned_data.shape[1] * scanned_data.shape[2],
-                                                 key="upscale")
                 upscaling_array[y * array_upscale:y * array_upscale + array_upscale,
                                 x * array_upscale:x * array_upscale + array_upscale,
                                 z] \
                                  = scanned_data[y, x, z] / (array_upscale ** 2)
-                counter = counter +1
                 print(x, y, z)
+        counter = counter +1
 
     PySimpleGUI.OneLineProgressMeterCancel('upscale')
 
@@ -323,18 +321,17 @@ def binning(sums, bin_array, mag_ratio):
     """
     counter = 0
     for z in range(0, bin_array.shape[2]):
+        PySimpleGUI.OneLineProgressMeter("Binning Progress (Won't Close)", counter, bin_array.shape[2],
+                                         key="binning")
         for y in range(0, bin_array.shape[0]):
             for x in range(0, bin_array.shape[1]):
-                PySimpleGUI.OneLineProgressMeter("Binning Progress (Won't Close)", counter,
-                                                 bin_array.shape[0] * bin_array.shape[2] * bin_array.shape[1], key="binning")
-
                 # Takes the convoluted and summed data and bins the sections into a new image
                 pixel_section = sums[int(y * mag_ratio):int(y * mag_ratio + mag_ratio),
                                      int(x * mag_ratio):int(x * mag_ratio + mag_ratio),
                                      z]
                 bin_array[y, x, z] = np.sum(pixel_section)  # Take the sum value of the section and bin it to the camera.
-                counter = counter +1
         print(z)
+        counter = counter +1
 
     PySimpleGUI.OneLineProgressMeterCancel('binning')
 
@@ -442,8 +439,8 @@ def ISM(pinhole_sum, point, pinhole_radius, scale=16):
 
     downscale = np.zeros((point.shape[0] * 2, point.shape[1] * 2))
     for y in range(0, downscale.shape[0]):
+        PySimpleGUI.OneLineProgressMeter("Downscaling Progress (Won't Close)", y, downscale.shape[0], key="downscale")
         for x in range(0, downscale.shape[1]):
-            PySimpleGUI.OneLineProgressMeter("Downscaling Progress (Won't Close)", x*y, downscale.shape[0] * downscale.shape[1], key="downscale")
 
             # Takes the convoluted and summed data and bins the sections into a new image
             pixel_section = final_image[int(y * scale // 2):int(y * scale // 2 + scale // 2),

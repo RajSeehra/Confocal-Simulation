@@ -131,19 +131,22 @@ while True:
     step = window.FindElement('Step')
     progression = window.FindElement('Progression')
 
+    if values["IM"] == "Widefield":
+        sg.set_options()
+
     step.Update("Checking Data")
     ### DATA CHECKING ###
     data_check = 0
-    int_checker("PS", 1, 1000)
-    int_checker("XY", 1, 2000)
-    int_checker("SS", 1, 2000)
-    float_checker("ET", 0, 100)
-    int_checker("CPS", 1, 30000)
-    int_checker("G", 1, 500)
-    int_checker("C", 0, 1000)
-    float_checker("rm", 0, 200)
-    float_checker("rs", 0, 200)
-    float_checker("fpn", 0, 1)
+    int_checker("PS", 1, 1000)  # Ground Truth Pixel Size
+    int_checker("XY", 1, 2000)  # XY image size
+    int_checker("SS", 1, 2000)  # Z stack size
+    float_checker("ET", 0, 100)  # Exposure Time
+    int_checker("CPS", 1, 30000)  # Camera Pixel Size
+    int_checker("G", 1, 500)    # Gain
+    int_checker("C", 0, 1000)   # Count
+    float_checker("rm", 0, 200)  # read noise mean
+    float_checker("rs", 0, 200)  # read noise standard deviation
+    float_checker("fpn", 0, 1)  # Fixed Pattern Noise
     if data_check == 0:
         float_checker("PR", 0, int(values["XY"]))
         int_checker("O", 0, int(values["XY"]))
@@ -171,8 +174,8 @@ while True:
         exposure_time = float(values["ET"])       # seconds of exposure
 
         # PSF
-        excitation_wavelength = float(values["EXW"])    # Wavelength in microns
-        emission_wavelength = float(values["EMW"])      # Wavelength in microns
+        excitation_wavelength = float(values["EXW"])/1000    # Wavelength in microns
+        emission_wavelength = float(values["EMW"])/1000      # Wavelength in microns
         NA = float(values["NA"])                       # Numerical aperture
         ### Dont touch the below line ###
         msPSF.m_params["NA"] = NA   # alters the value of the microscope parameters in microscPSF. Has a default value of 1.4

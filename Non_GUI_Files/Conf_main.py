@@ -1,7 +1,7 @@
 import numpy as np
-from Main Files import Confocal_Main_Func as confmain
-import Confocal_Processing as proc
-import Data_Check as dc
+from Non_GUI_Files import Confocal_Main_Func as confmain
+from Non_GUI_Files import Confocal_Processing as proc
+from Non_GUI_Files import Data_Check as dc
 import matplotlib.pyplot as plt
 import microscPSF as msPSF
 from fractions import Fraction

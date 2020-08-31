@@ -1,5 +1,5 @@
 import numpy as np
-import Confocal_Processing as proc
+from Non_GUI_Files import Confocal_Processing as proc
 import microscPSF as msPSF
 from scipy import signal
 from fractions import Fraction
