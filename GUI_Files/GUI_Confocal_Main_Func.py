@@ -1,12 +1,37 @@
 import numpy as np
-import Confocal_Processing as proc
+from GUI_Files import GUI_Confocal_Processing as proc
 import microscPSF as msPSF
 from scipy import signal
 from fractions import Fraction
 from skimage.transform import resize
+import PySimpleGUI
 
 
 ### SAMPLE/PSF FUNCTIONS ###
+def sample_selector(sample_type, point, intensity):
+    if sample_type == "Point Sample":
+        # Made a point in centre of 2D array
+        # point[25, 25, 1] = intensity
+        # point[75, 75, -1] = intensity
+        point[point.shape[0] // 2, point.shape[1] // 2, point.shape[2] // 2] = intensity
+
+    if sample_type == "Empty Sphere":
+        ## Spherical ground truth  ##
+        radius = 0.4* point.shape[0]
+        sphere_centre = (point.shape[0]//2, point.shape[1]//2, point.shape[2] // 2)
+        point = emptysphere3D(point, radius, sphere_centre) * intensity
+
+    if sample_type == "Complex Sphere":
+        ## More Complex Spherical Ground Truth ##
+        sample = point
+        sample = emptysphere3D(sample, int(sample.shape[0]*0.4), (sample.shape[1]//2, sample.shape[0]//2, sample.shape[2]//2))
+        sample2 = emptysphere3D(sample, int(sample.shape[0]*0.25), (sample.shape[1]//2.5, sample.shape[0]//2.5, sample.shape[2]//2.5))
+        sample3 = emptysphere3D(sample, int(sample.shape[0]*0.05), (sample.shape[1]//1.4, sample.shape[0]//1.4, sample.shape[2]//1.7))
+        sample4 = emptysphere3D(sample, int(sample.shape[0]*0.05), (sample.shape[1]//2.5, sample.shape[0]//1.4, sample.shape[2]//1.4))
+        point = (sample+sample2+sample3+sample4) * intensity
+
+    return point
+
 def emptysphere3D(array, radius, sphere_centre):
     """ A function that takes an array size, sphere centre and radius and constructs an empty sphere.
 
@@ -177,6 +202,7 @@ def stage_scanning(laserPSF, point, emission_PSF, include_shot_noise = "Y", fix_
         Yes or No. To include Shot noise or not.
     fix_seed : str
         Yes or No. To fix the Shot noise seed.
+
     Returns
     ----------
     sums : ndarray
@@ -193,6 +219,7 @@ def stage_scanning(laserPSF, point, emission_PSF, include_shot_noise = "Y", fix_
     # Iterates across the array to produce arrays illuminated by the sample, with a laser blurred by the first lens.
     for x in range(0, point.shape[1]):
         for y in range(0, point.shape[0]):
+            PySimpleGUI.OneLineProgressMeter("Stage Scanning Progress (Won't Close)", counter, point.shape[0] * point.shape[1], key="stage")
             # Multiplies the PSF multiplied laser with the sample. The centre of the sample is moved to position x,y
             # on the laser array, as this is a stage scanning microscope.
             laser_illum = array_multiply(point, laserPSF, x, y)
@@ -217,6 +244,7 @@ def stage_scanning(laserPSF, point, emission_PSF, include_shot_noise = "Y", fix_
             print("Counter: ", counter)
             counter = counter + 1
 
+    PySimpleGUI.OneLineProgressMeterCancel('stage')
     return sums
 
 
@@ -254,16 +282,24 @@ def upscale(scanned_data, mag_ratio):
     array_upscale = mag_ratio.denominator
     # The upscale value for the number of pixels to read back.
     upscale_ground_to_camera_num = mag_ratio.numerator
+    counter = 0
 
     upscaling_array = np.zeros((scanned_data.shape[0] * array_upscale, scanned_data.shape[1] * array_upscale, scanned_data.shape[2]))
     for z in range(0, scanned_data.shape[2]):
         for y in range(0, scanned_data.shape[0]):
             for x in range(0, scanned_data.shape[1]):
+                PySimpleGUI.OneLineProgressMeter("Upscaling Progress (Won't Close)", counter,
+                                                 scanned_data.shape[0] * scanned_data.shape[1] * scanned_data.shape[2],
+                                                 key="upscale")
                 upscaling_array[y * array_upscale:y * array_upscale + array_upscale,
                                 x * array_upscale:x * array_upscale + array_upscale,
                                 z] \
                                  = scanned_data[y, x, z] / (array_upscale ** 2)
+                counter = counter +1
                 print(x, y, z)
+
+    PySimpleGUI.OneLineProgressMeterCancel('upscale')
+
     return upscaling_array, upscale_ground_to_camera_num
 
 
@@ -285,15 +321,22 @@ def binning(sums, bin_array, mag_ratio):
     bin_array : ndarray
         the binned array of reduced xy size but equivalent z.
     """
+    counter = 0
     for z in range(0, bin_array.shape[2]):
         for y in range(0, bin_array.shape[0]):
             for x in range(0, bin_array.shape[1]):
+                PySimpleGUI.OneLineProgressMeter("Binning Progress (Won't Close)", counter,
+                                                 bin_array.shape[0] * bin_array.shape[2] * bin_array.shape[1], key="binning")
+
                 # Takes the convoluted and summed data and bins the sections into a new image
                 pixel_section = sums[int(y * mag_ratio):int(y * mag_ratio + mag_ratio),
                                      int(x * mag_ratio):int(x * mag_ratio + mag_ratio),
                                      z]
                 bin_array[y, x, z] = np.sum(pixel_section)  # Take the sum value of the section and bin it to the camera.
+                counter = counter +1
         print(z)
+
+    PySimpleGUI.OneLineProgressMeterCancel('binning')
 
     return bin_array
 
@@ -334,8 +377,12 @@ def confocal(pinhole_sum, point):
 
     # Iterate through the z stack and sum the values and add them to the appropriate place on the image.
     for i in range(0, pinhole_sum.shape[2]):
+        PySimpleGUI.OneLineProgressMeter("Confocal Progress (Won't Close)", i, pinhole_sum.shape[2], key="conf")
+
         conf_array[i % point.shape[0], i // point.shape[1]] = np.sum(pinhole_sum[:, :, i])
         print(i // point.shape[1], i % point.shape[0])
+
+    PySimpleGUI.OneLineProgressMeterCancel('conf')
 
     return conf_array
 
@@ -348,8 +395,12 @@ def ISM(pinhole_sum, point, pinhole_radius, scale=16):
     Cut_out_pinhole = int(2 * pinhole_radius)
     cut_section = np.zeros((pinhole_radius*2, pinhole_radius*2, pinhole_sum.shape[2]))
     for i in range(0, pinhole_sum.shape[2]):
+        PySimpleGUI.OneLineProgressMeter("Cutting Progress (Won't Close)", i, pinhole_sum.shape[2], key="cut")
+
         cut_section[:, :, i] = proc.pixel_cutter(pinhole_sum, y[1, i], y[0, i], Cut_out_pinhole, Cut_out_pinhole, i)
         print("cutting:", i)
+
+    PySimpleGUI.OneLineProgressMeterCancel('cut')
 
     scale = scale
     # The final image is initially at an arbitrary value greater than the original image.
@@ -360,8 +411,12 @@ def ISM(pinhole_sum, point, pinhole_radius, scale=16):
     upscaled_PSFs = np.zeros(
         (cut_section.shape[0] * (scale // 2), cut_section.shape[1] * (scale // 2), cut_section.shape[2]))
     for z in range(0, cut_section.shape[2] - 1):
+        PySimpleGUI.OneLineProgressMeter("Upscaling Progress (Won't Close)", z, pinhole_sum.shape[2], key="upscale")
+
         upscaled_PSFs[:, :, z] = resize(cut_section[:, :, z], (upscaled_PSFs.shape[0], upscaled_PSFs.shape[1]),
                                         mode="constant", cval=0)
+
+    PySimpleGUI.OneLineProgressMeterCancel('upscale')
 
     # Pad the final image so we can add the upscaled PSFs to it.
     final_image = np.pad(final_image, ((upscaled_PSFs.shape[0] // 2, upscaled_PSFs.shape[0] // 2),
@@ -369,12 +424,16 @@ def ISM(pinhole_sum, point, pinhole_radius, scale=16):
 
     # Place the arrays in the final image array at the appropriate position pos*16.
     for i in range(0, pinhole_sum.shape[2]):
+        PySimpleGUI.OneLineProgressMeter("Placing Progress (Won't Close)", i, pinhole_sum.shape[2], key="placement")
+
         x = i // point.shape[1]
         y = i % point.shape[0]
         final_image[y * scale:y * scale + upscaled_PSFs.shape[0], x * scale:x * scale + upscaled_PSFs.shape[1]] = \
             final_image[y * scale:y * scale + upscaled_PSFs.shape[0],
             x * scale:x * scale + upscaled_PSFs.shape[1]] + upscaled_PSFs[:, :, i]
         print("placing:", i // point.shape[1], i % point.shape[0])
+
+    PySimpleGUI.OneLineProgressMeterCancel('placement')
 
     final_image = final_image[upscaled_PSFs.shape[0] // 2:-upscaled_PSFs.shape[0] // 2,
                   upscaled_PSFs.shape[1] // 2:-upscaled_PSFs.shape[1] // 2]
@@ -384,10 +443,14 @@ def ISM(pinhole_sum, point, pinhole_radius, scale=16):
     downscale = np.zeros((point.shape[0] * 2, point.shape[1] * 2))
     for y in range(0, downscale.shape[0]):
         for x in range(0, downscale.shape[1]):
+            PySimpleGUI.OneLineProgressMeter("Downscaling Progress (Won't Close)", x*y, downscale.shape[0] * downscale.shape[1], key="downscale")
+
             # Takes the convoluted and summed data and bins the sections into a new image
             pixel_section = final_image[int(y * scale // 2):int(y * scale // 2 + scale // 2),
                             int(x * scale // 2):int(x * scale // 2 + scale // 2)]
             downscale[y, x] = np.sum(pixel_section)  # Take the sum value of the section and bin it to the camera.
         print("downscale:", y)
+
+    PySimpleGUI.OneLineProgressMeterCancel('downscale')
 
     return downscale

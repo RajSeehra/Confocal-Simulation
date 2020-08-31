@@ -1,3 +1,4 @@
+import PySimpleGUI
 # Needs evaluation to allow greater data checking simultaneously.
 def dict_datacheck_lesser_greater(data, lesser_values, greater_values):
     """ Will take a dictionary of variables and check if the check variable is in the ranges prescribed by the function.
@@ -76,3 +77,6 @@ def simple_datacheck_string(variable, variable_name, string_options):
         test_data = str(test_data)
 
     return test_data
+
+
+

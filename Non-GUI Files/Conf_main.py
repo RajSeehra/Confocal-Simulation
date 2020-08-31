@@ -1,5 +1,5 @@
 import numpy as np
-import Confocal_Main_Func as confmain
+from Main Files import Confocal_Main_Func as confmain
 import Confocal_Processing as proc
 import Data_Check as dc
 import matplotlib.pyplot as plt
