@@ -45,7 +45,7 @@ fix_seed = "Y"        # Y/N to fix the Shot noise seed.
 include_fixed_pattern_noise = "Y" # Y/N. Include fixed pattern noise
 fixed_pattern_deviation = 0.001  # Fixed pattern standard deviation. usually affects 0.1% of pixels.
 # MODE #
-mode = "Widefield"       # Mode refers to whether we are doing "Widefield NEED TO ADD", Confocal or ISM imaging.
+mode = "Confocal"       # Mode refers to whether we are doing "Widefield NEED TO ADD", Confocal or ISM imaging.
 # SAVE
 Preview = "Y"
 SAVE = "N"              # Save parameter, input Y to save, other parameters will not save.
@@ -117,13 +117,13 @@ else:
 point = np.zeros((xy_size, xy_size, laserPSF.shape[2]))
 # point[25, 25, 1] = intensity
 # point[75, 75, -1] = intensity
-point[laserPSF.shape[0]//2, laserPSF.shape[1]//2, laserPSF.shape[2] // 2] = intensity
+# point[laserPSF.shape[0]//2, laserPSF.shape[1]//2, laserPSF.shape[2] // 2] = intensity
 # point[laserPSF.shape[0]//2, laserPSF.shape[1]//2+20, laserPSF.shape[2] // 2] = intensity
 
 ## Spherical ground truth  ##
-# radius = 40
-# sphere_centre = (point.shape[0]//2, point.shape[1]//2, point.shape[2] // 2)
-# point = confmain.emptysphere3D(point, radius, sphere_centre) * intensity
+radius = 40
+sphere_centre = (point.shape[0]//2, point.shape[1]//2, point.shape[2] // 2)
+point = confmain.emptysphere3D(point, radius, sphere_centre) * intensity
 ## More Complex Spherical Ground Truth ##
 # sample = point
 # sample = confmain.emptysphere3D(sample, int(sample.shape[0]*0.4), (sample.shape[1]//2, sample.shape[0]//2, sample.shape[2]//2))
