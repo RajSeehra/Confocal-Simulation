@@ -14,6 +14,18 @@ from scipy import signal
 # Array sizes need to be odd to work with the convolution as a centre point needs to be determinable.
 
 def int_checker(variable, min, max):
+    ''' Checks if a variable given to it is a integer and if it is between certain parameters. If the characters checked
+        are invalid then they are removed from the entry field.
+
+        Parameters
+        ----------
+        variable : str
+            The key name from the window layout of the variable to be checked.
+        min : int
+            the minimum possible value of the variable
+        max: int
+            the maximum possible value of the variable
+        '''
     # if last character in input element is invalid, remove it
     global data_check, event, values, window
     check = True
@@ -36,6 +48,18 @@ def int_checker(variable, min, max):
 
 
 def float_checker(variable, min, max):
+    ''' Checks if a variable given to it is a float and if it is between certain parameters.If the characters checked
+        are invalid then they are removed from the entry field.
+
+    Parameters
+    ----------
+    variable : str
+        The key name from the window layout of the variable to be checked.
+    min : float
+        the minimum possible value of the variable
+    max: float
+        the maximum possible value of the float
+    '''
     # if last character in input element is invalid, remove it
     global data_check, event, values, window
     check = True
@@ -60,7 +84,8 @@ def float_checker(variable, min, max):
 
 sg.theme('DarkBlack')   # Adds a theme
 sg.set_options(font=("arial",(14)),text_justification="right")
-# All the stuff inside the window. With parameters to define the user input within certain limits.
+# All the stuff inside the window. With parameters to define the user input within certain limits. Each element in the
+# list refers to a separate line in the window. With elements within the elements defining the objects that exist there.
 layout = [  [sg.Text(text='Confocal Simulation Program', size=(60,1), pad=((25,5),(0,5)),
                      border_width=4, background_color="blue", justification="centre", font=("arial", 26, "bold"))],
             [sg.Text("")],
@@ -127,16 +152,13 @@ while True:
         window.close()
         break
 
-    # Define the progress bar to allow updates
+    # Define the step element and progression element to allow updates
     step = window.FindElement('Step')
     progression = window.FindElement('Progression')
 
-    if values["IM"] == "Widefield":
-        sg.set_options()
-
     step.Update("Checking Data")
     ### DATA CHECKING ###
-    data_check = 0
+    data_check = 0      # Initialising a check parameter that will increase if there is an erroneous entry in the field.
     int_checker("PS", 1, 1000)  # Ground Truth Pixel Size
     int_checker("XY", 1, 2000)  # XY image size
     int_checker("SS", 1, 2000)  # Z stack size
@@ -148,17 +170,17 @@ while True:
     float_checker("rs", 0, 200)  # read noise standard deviation
     float_checker("fpn", 0, 1)  # Fixed Pattern Noise
     if data_check == 0:
-        float_checker("PR", 0, int(values["XY"]))
-        int_checker("O", 0, int(values["XY"]))
+        float_checker("PR", 0, int(values["XY"]))   # Pinhole Radius, is related to XY size so only checked if XY is OK.
+        int_checker("O", 0, int(values["XY"]))      # Offset, is related to XY size so only checked if XY is OK.
 
+    # Counter to determine the steps total for the Imaging Mode chosen. Used in the "step" window element.
     steps = 0
     if values["IM"] == "Widefield":
         steps = 8
-    if values["IM"] == "Confocal":
+    elif values["IM"] == "Confocal":
         steps = 10
-    if values["IM"] == "ISM":
+    elif values["IM"] == "ISM":
         steps = 10
-
 
     if data_check == 0 and event in 'Run':      # Only runs if data is checked and within parameters.
         step.Update("Inputting data")
@@ -170,7 +192,7 @@ while True:
         pixel_size = int(values["PS"])/1000      # Ground truth pixel size in microns
         xy_size = int(values["XY"])           # xy size for both laser and sample.
         stack_size = int(values["SS"])         # Z depth for the PSF
-        laser_power = 10 ** float(values["LP"])       # Laser power per second in should be microwatts where 1 count = 1 microwatt. average in live cell is 15000 microwatt
+        laser_power = 10 ** float(values["LP"])       # Laser power per second in should be microwatts where 1000 count = 1 microwatt. average in live cell is 15000 microwatt
         exposure_time = float(values["ET"])       # seconds of exposure
 
         # PSF

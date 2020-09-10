@@ -222,7 +222,7 @@ def stage_scanning(laserPSF, point, emission_PSF, include_shot_noise = "Y", fix_
             PySimpleGUI.OneLineProgressMeter("Stage Scanning Progress (Won't Close)", counter, point.shape[0] * point.shape[1], key="stage")
             # Multiplies the PSF multiplied laser with the sample. The centre of the sample is moved to position x,y
             # on the laser array, as this is a stage scanning microscope.
-            laser_illum = array_multiply(point, laserPSF, x, y)
+            laser_illum = array_multiply(laserPSF, point, x, y)
 
             # Add Shot Noise to the laser Illumination.
             if include_shot_noise == "Y":
@@ -390,7 +390,7 @@ def ISM(pinhole_sum, point, pinhole_radius, scale=16):
     y = proc.centre_collection(pinhole_sum)
 
     Cut_out_pinhole = int(2 * pinhole_radius)
-    cut_section = np.zeros((pinhole_radius*2, pinhole_radius*2, pinhole_sum.shape[2]))
+    cut_section = np.zeros((Cut_out_pinhole, Cut_out_pinhole, pinhole_sum.shape[2]))
     for i in range(0, pinhole_sum.shape[2]):
         PySimpleGUI.OneLineProgressMeter("Cutting Progress (Won't Close)", i, pinhole_sum.shape[2], key="cut")
 
